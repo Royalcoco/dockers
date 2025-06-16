@@ -1,0 +1,626 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:6
+    container_name: iacoin_redis
+    ports:
+      - "6379:6379"
+  web:
+    build: ./web
+    container_name: iacoin_web
+    depends_on:
+      - redis
+    ports:
+      - "5000:5000"
+    environment:
+      - REDIS_HOST=redis
+
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+EXPOSE 5000
+
+CMD ["python", "server.py"]
+
+Flask
+redis
+flask-socketio
+eventlet
+
+import os, uuid, time
+from flask import Flask, jsonify, request, send_from_directory
+from flask_socketio import SocketIO, emit
+import redis
+
+app = Flask(__name__, static_folder='static', template_folder='templates')
+socketio = SocketIO(app, cors_allowed_origins="*")
+rdb = redis.Redis(host=os.getenv("REDIS_HOST","localhost"), port=6379, db=0)
+
+@app.route('/')
+def index():
+    return send_from_directory('static', 'index.html')
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    user = request.json['user']
+    msg = request.json['msg']
+    balance = float(rdb.get(f"bal:{user}") or 0)
+    reward = len(msg.split()) * 0.1
+    balance += reward
+    rdb.set(f"bal:{user}", balance)
+    rdb.rpush('tokens', f"{user}:{reward}:{time.time()}")
+    reply = msg[::-1]  # fake IA
+    socketio.emit('token_event', {'user': user, 'reward': reward})
+    return jsonify({ 'reply': reply, 'credits': balance })
+
+@app.route('/api/files')
+def list_files():
+    base = os.path.expanduser('~/Documents')
+    files = [f for f in os.listdir(base) if os.path.isfile(os.path.join(base, f))]
+    return jsonify(files)
+
+@app.route('/static/<path:path>')
+def send_static(path):
+    return send_from_directory('static', path)
+
+@socketio.on('connect')
+def on_connect():
+    emit('init', { 'tokens': rdb.lrange('tokens', -20, -1) })
+
+if __name__ == '__main__':
+    socketio.run(app, host='0.0.0.0', port=5000)
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>MatrixNet P2P Chat</title>
+<style>
+  body { font-family: monospace; background:#000; color:#0f0; margin:0; padding:20px }
+  #chatlog { height:200px; overflow-y:auto; border:1px solid #0f0; padding:10px }
+  #files { margin-top:20px }
+</style>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+<h1>MatrixNet Chat + Fluide & IAcoin</h1>
+<label>Pseudo : <input id="user" value="UserX"></label><br>
+<textarea id="msg" rows="3" cols="40"></textarea><br>
+<button onclick="send()">Envoyer</button>
+<div id="chatlog"></div>
+<button onclick="loadFiles()">Charger fichiers</button>
+<ul id="files"></ul>
+<h3>Activité IAcoin</h3>
+<pre id="tokens"></pre>
+<script>
+const socket = io();
+const log = msg => {
+  const d=document.getElementById('chatlog');
+  d.innerHTML += msg + "\n";
+  d.scrollTop = d.scrollHeight;
+};
+
+socket.on('init', data => {
+  document.getElementById('tokens').innerText = data.tokens.map(b=>atob(b)).join("\n");
+});
+socket.on('token_event', d => {
+  document.getElementById('tokens').innerText += `\n${d.user} +${d.reward} IAcoin`;
+});
+
+async function send(){
+  const u=document.getElementById('user').value;
+  const m=document.getElementById('msg').value;
+  log(`Vous: ${m}`);
+  const res = await fetch('/api/chat', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({user:u,msg:m})
+  });
+  const d = await res.json();
+  log(`IA: ${d.reply} [solde: ${d.credits}]`);
+}
+
+async function loadFiles(){
+  const r = await fetch('/api/files');
+  const list = await r.json();
+  const ul = document.getElementById('files');
+  ul.innerHTML = "";
+  list.forEach(f=>{
+    const li = document.createElement('li');
+    li.innerHTML = `<a href="/static/${f}" target="_blank">${f}</a>`;
+    ul.appendChild(li);
+  });
+}
+</script>
+</body>
+</html>
+
+/* Optionnel : animations, fond mouvement */
+
+using System;
+using System.Diagnostics;
+namespace Launcher {
+  class Program {
+    static void Main() {
+      Console.WriteLine("Lancement du réseau IA...");
+      Process.Start("docker-compose", "up --build -d");
+      Console.WriteLine("Conteneurs en cours, ouvrez http://localhost:5000/");
+      Console.WriteLine("Appuyez sur ENTER pour arrêter.");
+      Console.ReadLine();
+      Process.Start("docker-compose", "down");
+    }
+  }# visual_watch.py
+import threading, time, os
+from flask import Flask, send_from_directory, jsonify
+from flask_socketio import SocketIO
+import redis
+
+app = Flask(__name__, static_folder='static', template_folder='templates')
+socketio = SocketIO(app, cors_allowed_origins="*")
+rdb = redis.Redis(host=os.getenv("REDIS_HOST","localhost"), port=6379)
+
+# Serve index personnalisé avec visuel ajustable
+@app.route('/')
+def index():
+    return send_from_directory('static', 'index_watch.html')
+
+# Endpoint pour config dynamique
+@app.route('/config', methods=['POST'])
+def set_config():
+    cfg = flask.request.json
+    rdb.set('watch:config', str(cfg))
+    return jsonify({'status':'ok'})
+
+@app.route('/config', methods=['GET'])
+def get_config():
+    cfg = rdb.get('watch:config')
+    return jsonify({'config': cfg.decode() if cfg else '{}'}), 200
+
+# Listener de tokens pour visuel
+def monitor_tokens():
+    pubsub = rdb.pubsub()
+    pubsub.subscribe('token_channel')
+    for msg in pubsub.listen():
+        if msg['type'] == 'message':
+            data = msg['data'].decode()
+            socketio.emit('pulse', {'info': data})
+monitor_thread = threading.Thread(target=monitor_tokens, daemon=True)
+monitor_thread.start()
+
+if __name__ == '__main__':
+    socketio.run(app, host='0.0.0.0', port=6000)
+
+}
+
+csc Launcher.cs
+watch:
+  build: ./watch
+  ports:
+    - "6000:6000"
+  depends_on:
+    - web
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements-watch.txt .
+RUN pip install -r requirements-watch.txt
+COPY visual_watch.py static templates ./
+CMD ["python", "visual_watch.py"]
+Flask
+flask-socketio
+eventlet
+redis
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
+<canvas id="viz" width="500" height="200"></canvas>
+<div id="qrcode"></div>
+<script>
+// QR code de connexion
+QRCode.toDataURL(window.location.href, (err, url) => {
+  if (!err) {
+    const img = new Image();
+    img.src = url;
+    img.width = 128;
+    document.getElementById("qrcode").appendChild(img);
+  }
+});
+
+// Animation GPU pulsée (Canvas 2D accéléré)
+const viz = document.getElementById("viz");
+const ctxv = viz.getContext("2d");
+let pulses = [];
+
+function addPulse() {
+  pulses.push({ x: Math.random()*viz.width, y: Math.random()*viz.height, r:0 });
+}
+setInterval(() => {
+  addPulse();
+  if (pulses.length > 20) pulses.shift();
+}, 1000);
+
+function animateViz() {
+  ctxv.fillStyle = "rgba(0,0,0,0.1)";
+  ctxv.fillRect(0,0,viz.width,viz.height);
+  pulses.forEach((p,i) => {
+    p.r += 1;
+    const a = 1 - p.r/100;
+    ctxv.beginPath();
+    ctxv.arc(p.x, p.y, p.r*2, 0, Math.PI*2);
+    ctxv.strokeStyle = `rgba(0,255,0,${a})`;
+    ctxv.lineWidth = 2;
+    ctxv.stroke();
+  });
+  requestAnimationFrame(animateViz);
+}
+animateViz();
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><title>Watch View</title>
+<style>body{margin:0;background:#000}#viz{width:100vw;height:100vh;display:block}</style>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script></head>
+<body><canvas id="viz"></canvas><script>
+const socket = io();
+const canvas = document.getElementById('viz');
+const ctx = canvas.getContext('2d');
+canvas.width = innerWidth; canvas.height = innerHeight;
+let pulses = [];
+socket.on('pulse', d => {
+  const t = Date.now();
+  pulses.push({ time: t, maxr: innerWidth*0.2 });
+});
+function animate(){
+  ctx.fillStyle = 'rgba(0,0,0,0.1)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  const now = Date.now();
+  pulses = pulses.filter(p => {
+    const age = now - p.time;
+    if (age > 2000) return false;
+    const r = (age/2000) * p.maxr;
+    ctx.beginPath();
+    ctx.arc(canvas.width/2, canvas.height/2, r, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(0,255,0,${1-age/2000})`;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    return true;
+  });
+  requestAnimationFrame(animate);
+}
+socket.on('connect', animate);
+</script></body></html>
+<:>index_watch.html/build/docker-compose up --build -d/start Launcher.exe
+ia_analyze/
+├── app/
+│   ├── main.py           # Backend Flask (upload, chat, logs)
+│   ├── processor.py      # Traitement texte → tokens IAcoin
+│   └── utils.py          # Mémoire des logs
+├── templates/
+│   └── index.html        # Frontend complet
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── data/                 # Stockage pour uploads/exports
+Flask
+Werkzeug
+flask-socketio
+eventlet
+from flask import Flask, request, render_template, send_file, jsonify
+from flask_socketio import SocketIO, emit
+import os
+from app.processor import process_text
+from app.utils import log, get_logs, add_chat_log
+
+app = Flask(__name__, template_folder='../templates')
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+UPLOAD = "/data/uploads"
+EXPORT = "/data/exports"
+os.makedirs(UPLOAD, exist_ok=True)
+os.makedirs(EXPORT, exist_ok=True)
+
+# Pages
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+# Upload & analyse
+@app.route("/upload", methods=["POST"])
+def upload():
+    f = request.files["file"]
+    path = os.path.join(UPLOAD, f.filename)
+    f.save(path)
+    tokens = process_text(path)
+    log(f"Processed {f.filename}: {len(tokens)} tokens")
+    return jsonify({"tokens": len(tokens)})
+
+# Export token
+@app.route("/export", methods=["GET"])
+def export():
+    tokens = process_text(None)
+    export_path = os.path.join(EXPORT, "output.txt")
+    with open(export_path, "w") as out:
+        out.write("\n".join(tokens))
+    return send_file(export_path, as_attachment=True)
+
+# Provide logs
+@app.route("/logs", methods=["GET"])
+def logs():
+    return jsonify(get_logs())
+
+# Chat IA simple
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.json
+    user = data.get("user", "anon")
+    msg = data.get("msg", "")
+    reply = msg[::-1]  # IA basique
+    log(f"{user} says: {msg}")
+    add_chat_log(f"{user}: {msg}")
+    add_chat_log(f"IA: {reply}")
+    socketio.emit("chat", {"user": user, "msg": msg, "reply": reply})
+    return jsonify({"reply": reply})
+
+# WebSocket events
+@socketio.on("connect")
+def handle_connect():
+    # envoie historique logs + chat
+    emit("logs", get_logs())
+
+if __name__ == "__main__":
+    socketio.run(app, host="0.0.0.0", port=5000)
+from datetime import datetime
+logs = []
+chat_logs = []
+
+def log(msg):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    logs.append(f"[{timestamp}] {msg}")
+    if len(logs) > 200: logs.pop(0)
+
+def get_logs():
+    return logs + ["--- Chat History ---"] + chat_logs
+
+def add_chat_log(msg):
+    chat_logs.append(msg)
+    if len(chat_logs) > 200: chat_logs.pop(0)
+<!DOCTYPE html><html lang="fr">
+<head><meta charset="UTF-8">
+<title>IAcoin Analyze + Chat</title>
+<style>
+  body{font-family:monospace;background:#111;color:#0f0;padding:20px}
+  #irc,#chatlog,#logs{height:150px;overflow-y:auto;border:1px solid #0f0;margin-bottom:10px;padding:5px}
+  input,textarea,button{font-family:monospace;background:#222;color:#0f0;border:1px solid #0f0;margin:3px;padding:5px}
+</style>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head><body>
+<h1>IAcoin Analyzer & Chat IA</h1>
+<!-- Upload / Token -->
+<form id="uform">
+  <input type="file" name="file"><button>Uploader</button>
+</form>
+<button onclick="exportData()">Exporter tokens</button>
+<pre id="info"></pre>
+
+<!-- IRC-like logs -->
+<h2>🧾 Logs et Chat</h2>
+<pre id="irc"></pre>
+<pre id="chatlog"></pre>
+
+<!-- Chat interface -->
+<input id="user" placeholder="Pseudo"><br>
+<textarea id="msg" rows="2" cols="40"></textarea><br>
+<button onclick="sendChat()">Envoyer message IA</button>
+
+<script>
+const socket = io();
+const ircEl = document.getElementById("irc");
+const chatEl = document.getElementById("chatlog");
+const infoEl = document.getElementById("info");
+
+socket.on("logs", data => {
+  ircEl.textContent = data.join("\n");
+});
+socket.on("chat", d => {
+  const line = `${d.user}: ${d.msg}\nIA: ${d.reply}`;
+  chatEl.textContent += line + "\n";
+});
+
+document.getElementById("uform").onsubmit = async e => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const r = await fetch("/upload", {method:"POST",body:form}).then(r=>r.json());
+  infoEl.textContent = `🔹 Tokens générés : ${r.tokens}`;
+};
+
+async function exportData() {
+  const r = await fetch("/export");
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "output.txt"; a.click();
+}
+
+async function sendChat(){
+  const user = document.getElementById("user").value || "anon";
+  const msg = document.getElementById("msg").value;
+  const r = await fetch("/chat", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({user,msg})
+  }).then(r=>r.json());
+}
+</script>
+</body></html>
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app app
+COPY templates templates
+CMD ["python", "-u", "app/main.py"]
+version: "3.8"
+services:
+  analyze:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data
+docker-compose up --build
+# Dockerfile
+FROM node:20-alpine
+WORKDIR /app
+
+COPY . .
+
+RUN npm install
+
+EXPOSE 7000
+
+CMD ["node", "docker-scanner.js"]
+const WebSocket = require('ws');
+const fs = require('fs');
+
+const LOCAL_PORT = 7000;
+const REMOTE_URL = "wss://ton-serveur-cloud.com:443";
+
+const wss = new WebSocket.Server({ port: LOCAL_PORT });
+
+wss.on('connection', (client) => {
+  console.log("Client WebSocket connecté localement.");
+
+  client.on('message', (msg) => {
+    console.log("Data reçue :", msg);
+
+    // Analyse locale
+    const result = scanData(msg);
+
+    // Envoi réseau vers serveur distant
+    forwardToRemote(result);
+  });
+});
+
+function scanData(data) {
+  // Simule analyse IA (à remplacer par TensorFlow.js ou autre)
+  return JSON.stringify({
+    original: data,
+    detected: data.includes("danger") ? "anomaly" : "normal",
+    timestamp: Date.now()
+  });
+}
+
+function forwardToRemote(data) {
+  const socket = new WebSocket(REMOTE_URL);
+  socket.on('open', () => {
+    socket.send(data);
+    socket.close();
+  });
+}
+const socket = new WebSocket("ws://192.168.X.X:7000");
+
+socket.onopen = () => {
+  socket.send("scan_this_payload");
+};
+
+socket.onmessage = (e) => {
+  console.log("Résultat du scan :", e.data);
+};
+// remote-server.js (cloud)
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 443 });
+
+wss.on('connection', (ws) => {
+  ws.on('message', (msg) => {
+    console.log("Scan reçu :", msg);
+    // Stocker, logger, alerter...
+  });
+});
+📱 App React Native
+   └── 📡 WebSocket local
+        └── 🧠 Docker Scanner (Docker A)
+             ├── 🔌 Port de sortie externe : :7500
+             └── ➡️ Envoi vers Proxy Négatif (Docker B)
+                          └── Redirection dynamique vers :
+                              - Serveurs
+                              - Navigateur cible
+                              - Réseau P2P décentralisé
+const WebSocket = require('ws');
+const net = require('net');
+
+const SCAN_PORT = 7000;
+const OUTPUT_PORT = 7500;
+
+const scannerSocket = new WebSocket.Server({ port: SCAN_PORT });
+
+scannerSocket.on('connection', (client) => {
+  client.on('message', (msg) => {
+    const scanned = scan(msg);
+    forwardToProxy(scanned);
+  });
+});
+
+function scan(input) {
+  return JSON.stringify({
+    original: input,
+    result: input.includes("x") ? "block" : "allow",
+    time: new Date().toISOString()
+  });
+}
+
+function forwardToProxy(data) {
+  const client = new net.Socket();
+  client.connect(OUTPUT_PORT, 'proxy-b', () => {
+    client.write(data);
+    client.end();
+  });
+}
+FROM node:20
+WORKDIR /app
+COPY . .
+RUN npm install
+EXPOSE 7000 7500
+CMD ["node", "docker-scanner.js"]
+const net = require('net');
+
+const server = net.createServer((socket) => {
+  socket.on('data', (data) => {
+    const payload = data.toString();
+    const parsed = JSON.parse(payload);
+
+    console.log("Analyse proxy :", parsed);
+
+    if (parsed.result === "block") {
+      console.log("Bloqué : rien envoyé");
+    } else {
+      sendToRemote(payload);
+    }
+  });
+});
+
+function sendToRemote(payload) {
+  const client = new net.Socket();
+  client.connect(443, 'serveur.final.com', () => {
+    client.write(payload);
+    client.end();
+  });
+}
+
+server.listen(7500, () => {
+  console.log("Proxy négatif en écoute sur port 7500");
+});
+[
+  { "host": "192.168.1.21", "port": 7500 },
+  { "host": "192.168.1.22", "port": 7500 }
+]
+const fs = require('fs');
+const peers = JSON.parse(fs.readFileSync('peers.json', 'utf8'));
+
+function sendToPeers(data) {
+  for (const peer of peers) {
+    const socket = new net.Socket();
+    socket.connect(peer.port, peer.host, () => {
+      socket.write(data);
+      socket.end();
+    });
+  }
+}
