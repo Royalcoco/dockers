@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>MatrixNet Chat Universel</title>
+  <style>
+    body { font-family: monospace; background: #0a0a0a; color: #0f0; padding: 20px; }
+    input, textarea, button { font-family: monospace; padding: 8px; margin: 5px; background: #111; color: #0f0; border: 1px solid #0f0; }
+    #chatlog { height: 300px; overflow-y: scroll; border: 1px solid #0f0; padding: 10px; background: #000; }
+  </style>
+</head>
+<body>
+  <h1>💬 MatrixNet P2P Chat + IA</h1>
+  <label>Nom d'utilisateur :</label>
+  <input type="text" id="username" value="User42"><br>
+  <label>Serveur IA Backend :</label>
+  <input type="text" id="server" value="http://localhost:8000/api/chat"><br>
+  <textarea id="msg" rows="3" cols="40" placeholder="Écris ici..."></textarea><br>
+  <button onclick="send()">Envoyer</button>
+  <div id="chatlog"></div>
+
+  <script>
+    const logDiv = document.getElementById("chatlog");
+
+    function log(text) {
+      const line = document.createElement("div");
+      line.textContent = text;
+      logDiv.appendChild(line);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    async function send() {
+      const user = document.getElementById("username").value;
+      const msg = document.getElementById("msg").value;
+      const server = document.getElementById("server").value;
+      log(`${user} : ${msg}`);
+      try {
+        const res = await fetch(server, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user, msg })
+        });
+        const data = await res.json();
+        log(`IA : ${data.reply} [💰 ${data.credits || "0"} IAcoins]`);
+      } catch (e) {
+        log(`❌ Échec de connexion au backend : ${e}`);
+      }
+    }
+  </script>
+</body>
+</html>
+
+from flask import Flask, send_file, jsonify
+import os
+
+app = Flask(__name__)
+SHARED_DIR = os.path.expanduser("C:/Users/Public/Documents")
+
+@app.route("/files")
+def list_files():
+    files = [f for f in os.listdir(SHARED_DIR) if os.path.isfile(os.path.join(SHARED_DIR, f))]
+    return jsonify(files)
+
+@app.route("/file/<filename>")
+def get_file(filename):
+    path = os.path.join(SHARED_DIR, filename)
+    if os.path.exists(path):
+        return send_file(path)
+    else:
+        return "Not found", 404
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5050)
+// 🧠 Surveillance analytique locale (ping navigation)
+let fingerprint = "";
+function navAnalyticsPing(){
+  const u = document.getElementById("username").value;
+  fingerprint += u[0] + Date.now().toString().slice(-3);
+  if(fingerprint.length > 25){
+    const sig = fingerprint.slice(-9);
+    if(parseInt(sig) % 7 === 0){  // condition arbitraire
+      log("🧠 Accès déclenché par analyse comportementale.");
+      loadFiles();  // déclenche affichage fichiers
+    }
+  }
+}
+setInterval(navAnalyticsPing, 5000);  // ping toutes les 5s
+
+function Get-BinaryPatternState {
+    param([string]$bin)
+    
+    switch ($bin) {
+        "101"          { return 1 }
+        "010"          { return 1 }
+        "101010101"    { return 1 }
+        "010101010"    { return 0 }
+        "101010"       { return "0 (instable)" }
+        default        { return "?" }
+    }
+}
+
+function To-BinaryPattern {
+    param ([int]$val)
+    return [Convert]::ToString($val, 2)
+}
+
+function Get-SystemBinarySignature {
+    $os = Get-CimInstance Win32_OperatingSystem
+    $usedRAM = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1024, 0)
+
+    $gpuData = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine
+    $gpuUtil = ($gpuData | Measure-Object UtilizationPercentage -Average).Average
+    $gpuVal = [int]$gpuUtil
+
+    $net = Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object -First 1
+    $rx1 = (Get-NetAdapterStatistics -Name $net.Name).ReceivedBytes
+    Start-Sleep -Milliseconds 500
+    $rx2 = (Get-NetAdapterStatistics -Name $net.Name).ReceivedBytes
+    $rxRate = [int](($rx2 - $rx1) / 1024)
+
+    $ramBin = To-BinaryPattern $usedRAM
+    $gpuBin = To-BinaryPattern $gpuVal
+    $netBin = To-BinaryPattern $rxRate
+
+    $concat = ($ramBin.Substring(0,3) + $gpuBin.Substring(0,3) + $netBin.Substring(0,3)) -replace "[^01]", "0"
+    return $concat.Substring(0, [Math]::Min(9, $concat.Length))
+}
+
+while ($true) {
+    Clear-Host
+    Write-Host "=== 🧠 ATH MONITOR V2 ==="
+
+    $pattern = Get-SystemBinarySignature
+    $state = Get-BinaryPatternState -bin $pattern
+
+    Write-Host "`n[Signature Binaire] : $pattern"
+    Write-Host "[État Interprété]    : $state"
+
+    Start-Sleep -Seconds 1
+}
+
+# Lancer en mode admin, évidemment
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Warning "Ce script doit être lancé en tant qu'administrateur. Relance, champion."
+    exit
+}
+
+# Config
+$interval = 1
+$thresholdRAMMB = 400
+$thresholdRxKB = 500
+$thresholdGPUPercent = 70
+$logFile = "$PSScriptRoot\correlation_log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+
+$adapter = Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object -First 1
+
+Function Get-GPUUsage {
+    $gpuData = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine
+    $activeEngines = $gpuData | Where-Object { $_.UtilizationPercentage -gt 0 }
+    if ($activeEngines) {
+        return ($activeEngines | Measure-Object UtilizationPercentage -Average).Average
+    }
+    return 0
+}
+
+Function Log-Event($msg) {
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $line = "[$timestamp] $msg"
+    Write-Host $line
+    Add-Content -Path $logFile -Value $line
+}
+
+Write-Host "=== Surveillance en cours... appuie sur Ctrl+C pour quitter ==="
+Write-Host "Journal : $logFile"
+Start-Sleep -Seconds 2
+
+while ($true) {
+    # RAM
+    $os = Get-CimInstance Win32_OperatingSystem
+    $usedRAM = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1024, 2)
+
+    # GPU
+    $gpuUsage = [math]::Round((Get-GPUUsage), 2)
+
+    # Réseau (calcul différentiel)
+    $rx1 = (Get-NetAdapterStatistics -Name $adapter.Name).ReceivedBytes
+    Start-Sleep -Milliseconds ($interval * 1000)
+    $rx2 = (Get-NetAdapterStatistics -Name $adapter.Name).ReceivedBytes
+    $rxRateKB = [math]::Round(($rx2 - $rx1) / 1024, 2)
+
+    # Analyse corrélation
+    if ($usedRAM -gt $thresholdRAMMB -and $rxRateKB -gt $thresholdRxKB -and $gpuUsage -gt $thresholdGPUPercent) {
+        Log-Event "⚠️ CORRÉLATION détectée ! RAM=$usedRAM MB | Réseau=$rxRateKB KB/s | GPU=$gpuUsage%"
+    } else {
+        Write-Host "RAM=$usedRAM MB | Réseau=$rxRateKB KB/s | GPU=$gpuUsage%" -ForegroundColor DarkGray
+    }
+}
+
+import requests
+import time
+
+# 1. Grosse consommation mémoire
+data = bytearray(500 * 1024 * 1024)  # 500 Mo
+
+print("Données chargées en mémoire.")
+time.sleep(2)
+
+# 2. Sauvegarde sur disque
+with open("bigfile.tmp", "wb") as f:
+    f.write(data)
+
+print("Fichier écrit sur disque.")
+time.sleep(2)
+
+# 3. Upload (tu peux remplacer cette URL par un serveur local ou bidon)
+with open("bigfile.tmp", "rb") as f:
+    response = requests.post("https://httpbin.org/post", files={"file": f})
+
+print("Upload terminé.")
+del data  # Libération mémoire
+time.sleep(2)
+
+# 4. Réseau descend naturellement après la fin de la tâche
+print("Fin du processus.")
+
+# Lister les DLL avec leur version et les exporter pour analyse de corrélation
+
+$searchPath = "C:\MonProjet\bin"  # <-- Remplace par le dossier qui t'intéresse
+$exportPath = "C:\RapportsVersions"
+
+if (!(Test-Path $exportPath)) {
+    New-Item -Path $exportPath -ItemType Directory | Out-Null
+}
+
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$outputFile = Join-Path $exportPath "versions_$timestamp.csv"
+
+Get-ChildItem -Path $searchPath -Recurse -Include *.dll, *.exe |
+    Where-Object { $_.VersionInfo.FileVersion } |
+    Select-Object FullName, @{Name="FileVersion";Expression={$_.VersionInfo.FileVersion}}, LastWriteTime |
+    Export-Csv -Path $outputFile -NoTypeInformation
+
+Write-Host "📦 Rapport de version généré : $outputFile"
+
+# Nécessite: Windows 10+, PowerShell 5+, et l'appli NVIDIA si t'es team RTX
+# Affiche: Mémoire vive dispo, débit réseau entrant/sortant, usage GPU (via WMI)
+# Spoiler: Le GPU ne surveille rien, mais il est invité à la fête
+
+$netAdapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
+
+while ($true) {
+    Clear-Host
+
+    # 🧠 Mémoire Vive
+    $os = Get-CimInstance Win32_OperatingSystem
+    $totalRAM = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
+    $freeRAM = [math]::Round($os.FreePhysicalMemory / 1MB, 2)
+    $usedRAM = [math]::Round($totalRAM - $freeRAM, 2)
+
+    # 🌐 Réseau
+    $stats1 = Get-NetAdapterStatistics -Name $netAdapter.Name
+    Start-Sleep -Milliseconds 1000
+    $stats2 = Get-NetAdapterStatistics -Name $netAdapter.Name
+
+    $rx = [math]::Round(($stats2.ReceivedBytes - $stats1.ReceivedBytes) / 1024, 2)
+    $tx = [math]::Round(($stats2.SentBytes - $stats1.SentBytes) / 1024, 2)
+
+    # 🎮 GPU (NVIDIA) - lecture de la température et mémoire utilisée (si supporté)
+    $gpuInfo = Get-CimInstance -Namespace root\CIMV2 -ClassName Win32_VideoController | Select-Object Name, AdapterRAM
+
+    Write-Host "=== 🧠 Mémoire Vive ==="
+    Write-Host "Total RAM      : $totalRAM MB"
+    Write-Host "Utilisée       : $usedRAM MB"
+    Write-Host "Libre          : $freeRAM MB"
+
+    Write-Host "`n=== 🌐 Réseau (${netAdapter.Name}) ==="
+    Write-Host "Réception      : $rx KB/s"
+    Write-Host "Transmission   : $tx KB/s"
+
+    Write-Host "`n=== 🎮 GPU Info ==="
+    foreach ($gpu in $gpuInfo) {
+        $ramGB = [math]::Round($gpu.AdapterRAM / 1GB, 2)
+        Write-Host "$($gpu.Name) - $ramGB GB de VRAM"
+    }
+
+    Start-Sleep -Seconds 1
+}
+# Vérifie si on est en admin
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+    [Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Warning "⚠ Ce script doit être exécuté en tant qu'administrateur."
+    exit
+}
+
+function To-Binary {
+    param ([long]$value)
+    return [Convert]::ToString($value, 2).PadLeft(32, '0')
+}
+
+$netAdapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
+
+while ($true) {
+    Clear-Host
+
+    # 🧠 Mémoire vive
+    $os = Get-CimInstance Win32_OperatingSystem
+    $totalRAM = [math]::Round($os.TotalVisibleMemorySize / 1KB, 2)
+    $freeRAM = [math]::Round($os.FreePhysicalMemory / 1KB, 2)
+    $usedRAM = [math]::Round($totalRAM - $freeRAM, 2)
+
+    # Binaire
+    $usedRAMBinary = To-Binary $usedRAM
+
+    # 🌐 Réseau
+    $stats1 = Get-NetAdapterStatistics -Name $netAdapter.Name
+    Start-Sleep -Milliseconds 1000
+    $stats2 = Get-NetAdapterStatistics -Name $netAdapter.Name
+
+    $rx = [math]::Round(($stats2.ReceivedBytes - $stats1.ReceivedBytes), 2)
+    $tx = [math]::Round(($stats2.SentBytes - $stats1.SentBytes), 2)
+
+    $rxBinary = To-Binary $rx
+    $txBinary = To-Binary $tx
+
+    # 🎮 GPU Info (binaire juste pour le fun)
+    $gpuInfo = Get-CimInstance -Namespace root\CIMV2 -ClassName Win32_VideoController | Select-Object Name, AdapterRAM
+
+    Write-Host "=== 🧠 Mémoire Vive ==="
+    Write-Host "Utilisée      : $usedRAM MB"
+    Write-Host "En Binaire    : $usedRAMBinary"
+
+    Write-Host "`n=== 🌐 Réseau (${netAdapter.Name}) ==="
+    Write-Host "Rx (octets/s) : $rx"
+    Write-Host "   Binaire Rx : $rxBinary"
+    Write-Host "Tx (octets/s) : $tx"
+    Write-Host "   Binaire Tx : $txBinary"
+
+    Write-Host "`n=== 🎮 GPU Info ==="
+    foreach ($gpu in $gpuInfo) {
+        $vramMB = [math]::Round($gpu.AdapterRAM / 1MB, 2)
+        $vramBinary = To-Binary $vramMB
+        Write-Host "$($gpu.Name) - $vramMB MB VRAM"
+        Write-Host "Binaire VRAM : $vramBinary"
+    }
+
+    Start-Sleep -Seconds 1
+}
+function Assert-Admin {
+    if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Warning "Exécute en tant qu'administrateur, four à micro-ondes."
+        exit
+    }
+}
+
+function To-BinaryAscii {
+    param([string]$text)
+    return ($text.ToCharArray() | ForEach-Object { [Convert]::ToString([int][char]$_,2).PadLeft(8,'0') }) -join " "
+}
+
+function Show-BinaryLine {
+    param([string]$label, [string]$value)
+    $full = "$label : $value"
+    $binary = To-BinaryAscii $full
+    Write-Host "$binary"
+}
+
+Assert-Admin
+
+while ($true) {
+    Clear-Host
+
+    $os = Get-CimInstance Win32_OperatingSystem
+    $totalRAM = [math]::Round($os.TotalVisibleMemorySize / 1KB, 2)
+    $usedRAM = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1KB, 2)
+
+    $gpuData = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine
+    $gpuUse = ($gpuData | Measure-Object UtilizationPercentage -Average).Average
+    $gpuUse = [math]::Round($gpuUse, 2)
+
+    $adapter = Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object -First 1
+    $rx1 = (Get-NetAdapterStatistics -Name $adapter.Name).ReceivedBytes
+    Start-Sleep -Milliseconds 500
+    $rx2 = (Get-NetAdapterStatistics -Name $adapter.Name).ReceivedBytes
+    $rxRate = [math]::Round(($rx2 - $rx1) / 1024, 2)
+
+    Show-BinaryLine "RAM utilisée (MB)" $usedRAM
+    Show-BinaryLine "GPU utilisé (%)" $gpuUse
+    Show-BinaryLine "Réseau (KB/s)" $rxRate
+
+    Start-Sleep -Seconds 1
+}
+Install-Module -Name ps2exe -Scope CurrentUser
+
+C:\Users\Toaster\Desktop\ath-binaire.ps1
+
+Invoke-ps2exe "C:\Users\Toaster\Desktop\ath-binaire.ps1" "C:\Users\Toaster\Desktop\ath-binaire.exe" -noConsole -requireAdmin
+
+# En-tête
+$Host.UI.RawUI.BackgroundColor = 'Black'
+$Host.UI.RawUI.ForegroundColor = 'Green'
+Clear-Host
+
+# (le reste de ton script…)
+
+C:\Users\Toaster\Desktop\toaster_icon.ico
+
+Install-Module -Name ps2exe-ng -Scope CurrentUser
+
+Invoke-PS2EXE-GUI -inputFile "C:\Users\Toaster\Desktop\ath-binaire.ps1" `
+  -outputFile "C:\Users\Toaster\Desktop\ath-dark.exe" `
+  -icon "C:\Users\Toaster\Desktop\toaster_icon.ico" `
+  -requireAdmin -noConsole
+
+[G* HEATPULSE] : ████▒▒▒▒▒▒
+function Get-GPUHeatPulse {
+    $gpuEngines = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine
+    $activeEngines = $gpuEngines | Where-Object { $_.UtilizationPercentage -gt 0 }
+
+    $total = ($gpuEngines | Measure-Object UtilizationPercentage -Sum).Sum
+    $activeCount = $activeEngines.Count
+
+    # Calcul d'un index de "pulsation thermique"
+    $score = [math]::Min(100, [math]::Round(($total + ($activeCount * 10)) / 2, 0))
+
+    return $score
+}
+
+function Get-HeatBar {
+    param ([int]$score)
+    $full = [math]::Floor($score / 10)
+    $empty = 10 - $full
+    return ('█' * $full) + ('▒' * $empty)
+}
+
+
+$vramState = Get-VRAMAnxiety
+$despair = Get-CoreDespairIndex
+$ennui = Invoke-GPUEnnui
+
+Write-Host "[VRAM ANXIETY] : $($vramState.Bar) ($($vramState.Score)%)"
+Write-Host "[DESPAIR INDEX] : $despair / 100"
+Write-Host "[GPU MOOD]      : $ennui"
+
+
+$heatScore = Get-GPUHeatPulse
+$heatBar = Get-HeatBar $heatScore
+Write-Host "[G* HEATPULSE] : $heatBar ($heatScore%)"
+
+function Get-VRAMAnxiety {
+    $gpu = Get-CimInstance Win32_VideoController | Select-Object -First 1
+    $totalMB = [math]::Round($gpu.AdapterRAM / 1MB, 0)
+
+    # NOTE : approximation, il n’y a pas d'API directe pour usage actuel VRAM sans outil NVIDIA/3rd party
+    $usedMB = [math]::Round($totalMB * 0.42)  # Fake usage pour test
+    $percentage = [math]::Round(($usedMB / $totalMB) * 100, 0)
+
+    return @{
+        Score = $percentage
+        Bar = ('█' * [math]::Floor($percentage / 10)) + ('░' * (10 - [math]::Floor($percentage / 10)))
+    }
+}
+🔥 CORRELATION DETECTÉE À 14:22:08
+- GPU à 97%
+- RAM usage +400MB
+- Réseau entrant à 18MB/s
+101        → 1  
+010        → 1  
+101010101  → 1  
+101010     → 0 - (0 + 1) ← (c’est quoi ça, une devinette sur base 3 ?)  
+010101010
+
+function Get-CoreDespairIndex {
+    $engines = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine
+    $overworked = $engines | Where-Object { $_.UtilizationPercentage -gt 90 }
+
+    $despair = [math]::Min(100, ($overworked.Count * 15))
+    return $despair
+}
+
+$global:gpuLastUsed = Get-Date
+
+function Invoke-GPUEnnui {
+    $engines = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine
+    $active = $engines | Where-Object { $_.UtilizationPercentage -gt 5 }
+
+    if ($active.Count -gt 0) {
+        $global:gpuLastUsed = Get-Date
+        return "🟢 Actif"
+    } else {
+        $idleTime = (Get-Date) - $global:gpuLastUsed
+        if ($idleTime.TotalSeconds -gt 10) {
+            return "🟡 Ennui profond"
+        } else {
+            return "⚪ Repos"
+        }
+    }
+}
+
+# Affichage synthétique de l'état système binaire + humeur GPU
+
+while ($true) {
+    Clear-Host
+
+    $pattern = Get-SystemBinarySignature
+    $state = Get-BinaryPatternState -bin $pattern
+
+    $vramState = Get-VRAMAnxiety
+    $despair = Get-CoreDespairIndex
+    $ennui = Invoke-GPUEnnui
+    $heatScore = Get-GPUHeatPulse
+    $heatBar = Get-HeatBar $heatScore
+
+    Write-Host "=== 🧠 ATH MONITOR V2 (SYNTHÈSE) ==="
+    Write-Host "`n[Signature Binaire] : $pattern"
+    Write-Host "[État Interprété]    : $state"
+    Write-Host "[VRAM ANXIETY] : $($vramState.Bar) ($($vramState.Score)%)"
+    Write-Host "[DESPAIR INDEX] : $despair / 100"
+    Write-Host "[GPU MOOD]      : $ennui"
+    Write-Host "[G* HEATPULSE]  : $heatBar ($heatScore%)"
+
+    Start-Sleep -Seconds 2
+}
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>🧠 Panneau de Contrôle IA - Admin</title>
+  <style>
+    body {
+      background: #000;
+      color: #00ff88;
+      font-family: monospace;
+      padding: 20px;
+    }
+    h1 {
+      color: #ffaa00;
+    }
+    button {
+      margin: 5px;
+      padding: 10px;
+      background: #111;
+      color: #0f0;
+      border: 1px solid #0f0;
+      cursor: pointer;
+    }
+    #log {
+      margin-top: 20px;
+      max-height: 300px;
+      overflow-y: scroll;
+      background: #111;
+      padding: 10px;
+      border: 1px solid #0f0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🛠️ Console Admin IA</h1>
+
+  <div>
+    <h3>🔌 Hotspot</h3>
+    <input type="text" id="ssid" placeholder="SSID" value="IA_MATRIX">
+    <input type="text" id="pass" placeholder="Mot de passe" value="12345678">
+    <button onclick="startAP()">Lancer le hotspot</button>
+  </div>
+
+  <div>
+    <h3>🔍 Clients connectés</h3>
+    <button onclick="scanClients()">Scanner le réseau</button>
+    <ul id="clientList"></ul>
+  </div>
+
+  <div>
+    <h3>💱 Marché IAcoin</h3>
+    <button onclick="updateMarket()">Mettre à jour le marché</button>
+    <p id="market">Valeur actuelle : inconnue</p>
+  </div>
+
+  <div id="log"></div>
+
+  <script>
+    const log = (msg) => {
+      const entry = document.createElement("div");
+      entry.innerText = `> ${msg}`;
+      document.getElementById("log").prepend(entry);
+    };
+
+    async function startAP() {
+      const ssid = document.getElementById("ssid").value;
+      const password = document.getElementById("pass").value;
+      const res = await fetch("/start_ap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ssid, password })
+      });
+      const data = await res.json();
+      if (data.status) log(`Hotspot activé: ${data.ssid}`);
+      else log(`Erreur: ${data.error}`);
+    }
+
+    async function scanClients() {
+      const res = await fetch("/scan_clients");
+      const data = await res.json();
+      const list = document.getElementById("clientList");
+      list.innerHTML = "";
+      if (data.status === "OK") {
+        Object.entries(data.clients).forEach(([alias, client]) => {
+          const li = document.createElement("li");
+          li.innerText = `${alias} [IP masquée]`;
+          list.appendChild(li);
+        });
+        log("Clients détectés mis à jour.");
+      } else {
+        log(`Erreur de scan: ${data.error}`);
+      }
+    }
+
+    async function updateMarket() {
+      const res = await fetch("/market");
+      const data = await res.json();
+      document.getElementById("market").innerText = `Valeur actuelle : ${data.coin_value} €`;
+      log(`Nouveau cours IAcoin : ${data.coin_value} €`);
+    }
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>🧠 Terminal IA Admin</title>
+  <style>
+    html, body {
+      background: black;
+      color: #00ff88;
+      font-family: monospace;
+      margin: 0;
+      padding: 20px;
+      height: 100vh;
+      overflow: hidden;
+    }
+    h1 {
+      color: #ffaa00;
+      margin-bottom: 20px;
+    }
+    button {
+      background: black;
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      padding: 8px 12px;
+      margin: 5px;
+      cursor: pointer;
+    }
+    input {
+      background: black;
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      padding: 5px;
+      margin: 5px;
+    }
+    #terminal {
+      background: #111;
+      border: 1px solid #00ff88;
+      height: 60vh;
+      overflow-y: scroll;
+      padding: 10px;
+    }
+    #status {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧠 TERMINAL DE COMMANDE IA</h1>
+
+  <div>
+    <button onclick="execCommand('start')">Démarrer Hotspot</button>
+    <button onclick="execCommand('scan')">Scanner Clients</button>
+    <button onclick="execCommand('market')">Maj Marché</button>
+    <input type="text" id="ssid" placeholder="SSID" value="IA_MATRIX">
+    <input type="text" id="pass" placeholder="Password" value="12345678">
+  </div>
+
+  <div id="terminal"></div>
+  <div id="status"></div>
+
+  <script>
+    const terminal = document.getElementById("terminal");
+    function log(msg) {
+      const line = document.createElement("div");
+      line.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      terminal.prepend(line);
+    }
+
+    async function execCommand(cmd) {
+      if (cmd === 'start') {
+        const ssid = document.getElementById("ssid").value;
+        const password = document.getElementById("pass").value;
+        const res = await fetch("/start_ap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ssid, password })
+        });
+        const data = await res.json();
+        log(data.status ? `✅ Hotspot lancé : ${data.ssid}` : `❌ Erreur : ${data.error}`);
+      }
+      if (cmd === 'scan') {
+        const res = await fetch("/scan_clients");
+        const data = await res.json();
+        if (data.status === 'OK') {
+          Object.entries(data.clients).forEach(([alias]) => {
+            log(`📡 ${alias} détecté (adresse masquée)`);
+          });
+        } else log(`❌ Erreur de scan : ${data.error}`);
+      }
+      if (cmd === 'market') {
+        const res = await fetch("/market");
+        const data = await res.json();
+        log(`💱 Nouveau taux IAcoin : ${data.coin_value} €`);
+      }
+    }
+  </script>
+</body>
+</html>
+from flask import Flask, jsonify, request
+import os, threading, time, uuid, json, base64
+from cryptography.fernet import Fernet
+
+app = Flask(__name__)
+nodes = {}; logs=[]
+CLOUD_FOLDER = "semi_cloud"
+os.makedirs(CLOUD_FOLDER, exist_ok=True)
+key = Fernet.generate_key(); crypto = Fernet(key)
+
+def log(msg):
+    timestamp = time.strftime("%H:%M:%S")
+    logs.append(f"[{timestamp}] {msg}")
+    if len(logs) > 100: logs.pop(0)
+
+@app.route("/init_node", methods=["POST"])
+def init_node():
+    identity = str(uuid.uuid4())[:8]
+    masked = base64.urlsafe_b85encode(identity.encode()).decode()
+    nodes[identity] = {"masked_ip": masked, "balance":0}
+    log(f"Nœud {identity} init → masque {masked}")
+    return jsonify(nodes[identity]), 200
+
+@app.route("/send_data", methods=["POST"])
+def send_data():
+    data = request.json
+    nid=data["id"]; size=data["size"]
+    enc = crypto.encrypt(f"{nid}:{size}".encode())
+    nodes[nid]["balance"] += size*0.001
+    # store in semi-cloud
+    with open(os.path.join(CLOUD_FOLDER,f"{nid}.log"),"ab") as f: f.write(enc+b"\n")
+    log(f"Data reçue node:{nid} size:{size} → balance:{nodes[nid]['balance']:.4f}")
+    return jsonify({"status":"ok","encrypted":True}),200
+
+@app.route("/logs")
+def get_logs(): return jsonify(logs),200
+
+@app.route("/nodes")
+def list_nodes(): return jsonify(nodes),200
+
+threading.Thread(target=lambda: time.sleep(2) or log("Sandbox prêt")).start()
+
+if __name__=="__main__":
+from threading import Thread
+
+def auto_push():
+    while True:
+        time.sleep(30)
+        push_cloud()
+
+Thread(target=auto_push, daemon=True).start()
+app.run(…)
+
+    app.run(debug=True,host="0.0.0.0",port=9090)
+<!DOCTYPE html><html lang="fr">
+<head><meta charset="UTF-8"><title>Sandbox IAcoin</title>
+<style>body{font-family:monospace;background:#111;color:#0f0}</style>
+</head><body>
+<h1>Sandbox IAcoin Console</h1>
+<button onclick="init()">Init Nœud</button>
+<button onclick="send()">Send Data</button>
+<div id="nodes"></div><div id="logs"></div>
+
+<script>
+let nodeId="";
+async function init(){
+  const r=await fetch('/init_node',{method:"POST"}).then(r=>r.json());
+  nodeId=Object.keys(r)[0]||r.masked_ip? "created":"fail";
+  update();
+}
+async function send(){
+  if(!nodeId){alert("Init d'abord");return;}
+  const size=Math.floor(Math.random()*500+100);
+  await fetch('/send_data',{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:nodeId,size})});
+  update();
+}
+async function update(){
+  const n=await fetch('/nodes').then(r=>r.json());
+  const l=await fetch('/logs').then(r=>r.json());
+  document.getElementById("nodes").innerHTML="<h2>Nœuds</h2><pre>"+JSON.stringify(n,null,2)+"</pre>";
+  document.getElementById("logs").innerHTML="<h2>Logs</h2><pre>"+l.join("\n")+"</pre>";
+}
+setInterval(update,2000);
+</script>
+</body></html>
+import requests
+
+def is_online():
+    try:
+        requests.head("https://example.com", timeout=3)
+        return True
+    except:
+        return False
+@app.route("/push_cloud", methods=["POST"])
+def push_cloud():
+    # only if online
+    if not is_online():
+        log("🌐 Pas de connexion Internet : push différé")
+        return jsonify({"status": "deferred"}), 202
+
+    # envoie des fichiers du dossier `semi_cloud`
+    for fname in os.listdir(CLOUD_FOLDER):
+        with open(os.path.join(CLOUD_FOLDER, fname), "rb") as f:
+            enc = f.read()
+            # ici tu envoies `enc` vers un serveur tiers
+            requests.post("https://ton-cloud.com/api/upload", data=enc)
+            os.remove(os.path.join(CLOUD_FOLDER, fname))
+            log(f"🌩️ Fichier {fname} envoyé au cloud et supprimé localement")
+    return jsonify({"status": "pushed"}), 200
+<button onclick="pushCloud()">Push Cloud</button>
+<div id="pushResult"></div>
+
+<script>
+async function pushCloud() {
+  const res = await fetch("/push_cloud", {method:"POST"});
+  const data = await res.json();
+  document.getElementById("pushResult").innerText = `Push status: ${data.status}`;
+}
+</script>
+<Body>
+/ia_sandbox_project/
+├── app/
+│   ├── __init__.py
+│   ├── routes.py         # Tous les endpoints Flask
+│   ├── core.py           # Logique : init_node, send_data, encryption
+│   ├── cloud.py          # Fonction push_cloud() et is_online()
+│   ├── crypto.py         # Gestion chiffrage / tokenizer
+│   └── utils.py          # Logs, formatage, alias, etc.
+├── templates/
+│   └── index.html        # Interface terminal de commande + cloud push
+├── semi_cloud/
+│   └── (fichiers .log chiffrés temporaires)
+├── tokenizer/
+│   ├── tokenizer.py      # Traitement de données en blocs IAcoin
+│   └── registry.json     # Dictionnaire/tokenmap des envois
+├── static/               # (si tu veux y mettre effets matrix / images)
+├── server.py             # Point d’entrée principal Flask
+└── requirements.txt
+from flask import Flask, jsonify, request
+import os, threading, time, uuid, json, base64
+from cryptography.fernet import Fernet
+
+app = Flask(__name__)
+nodes = {}; logs=[]
+CLOUD_FOLDER = "semi_cloud"
+os.makedirs(CLOUD_FOLDER, exist_ok=True)
+key = Fernet.generate_key(); crypto = Fernet(key)
+
+def log(msg):
+    timestamp = time.strftime("%H:%M:%S")
+    logs.append(f"[{timestamp}] {msg}")
+    if len(logs) > 100: logs.pop(0)
+
+@app.route("/init_node", methods=["POST"])
+def init_node():
+    identity = str(uuid.uuid4())[:8]
+    masked = base64.urlsafe_b85encode(identity.encode()).decode()
+    nodes[identity] = {"masked_ip": masked, "balance":0}
+    log(f"Nœud {identity} init → masque {masked}")
+    return jsonify(nodes[identity]), 200
+
+@app.route("/send_data", methods=["POST"])
+def send_data():
+    data = request.json
+    nid=data["id"]; size=data["size"]
+    enc = crypto.encrypt(f"{nid}:{size}".encode())
+    nodes[nid]["balance"] += size*0.001
+    # store in semi-cloud
+    with open(os.path.join(CLOUD_FOLDER,f"{nid}.log"),"ab") as f: f.write(enc+b"\n")
+    log(f"Data reçue node:{nid} size:{size} → balance:{nodes[nid]['balance']:.4f}")
+    return jsonify({"status":"ok","encrypted":True}),200
+
+@app.route("/logs")
+def get_logs(): return jsonify(logs),200
+
+@app.route("/nodes")
+def list_nodes(): return jsonify(nodes),200
+
+threading.Thread(target=lambda: time.sleep(2) or log("Sandbox prêt")).start()
+
+if __name__=="__main__":
+    app.run(debug=True,host="0.0.0.0",port=9090)
+<!DOCTYPE html><html lang="fr">
+<head><meta charset="UTF-8"><title>Sandbox IAcoin</title>
+<style>body{font-family:monospace;background:#111;color:#0f0}</style>
+</head><body>
+<h1>Sandbox IAcoin Console</h1>
+<button onclick="init()">Init Nœud</button>
+<button onclick="send()">Send Data</button>
+<div id="nodes"></div><div id="logs"></div>
+
+<script>
+let nodeId="";
+async function init(){
+  const r=await fetch('/init_node',{method:"POST"}).then(r=>r.json());
+  nodeId=Object.keys(r)[0]||r.masked_ip? "created":"fail";
+  update();
+}
+async function send(){
+  if(!nodeId){alert("Init d'abord");return;}
+  const size=Math.floor(Math.random()*500+100);
+  await fetch('/send_data',{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:nodeId,size})});
+  update();
+}
+async function update(){
+  const n=await fetch('/nodes').then(r=>r.json());
+  const l=await fetch('/logs').then(r=>r.json());
+  document.getElementById("nodes").innerHTML="<h2>Nœuds</h2><pre>"+JSON.stringify(n,null,2)+"</pre>";
+  document.getElementById("logs").innerHTML="<h2>Logs</h2><pre>"+l.join("\n")+"</pre>";
+}
+setInterval(update,2000);
+</script>
+</body></html>
+import requests
+
+def is_online():
+    try:
+        requests.head("https://example.com", timeout=3)
+        return True
+    except:
+        return False
+if__name__=="__main__"
+/ia_sandbox_project/
+├── app/
+│   ├── __init__.py
+│   ├── routes.py         # Tous les endpoints Flask
+│   ├── core.py           # Logique : init_node, send_data, encryption
+│   ├── cloud.py          # Fonction push_cloud() et is_online()
+│   ├── crypto.py         # Gestion chiffrage / tokenizer
+│   └── utils.py          # Logs, formatage, alias, etc.
+├── templates/
+│   └── index.html        # Interface terminal de commande + cloud push
+├── semi_cloud/
+│   └── (fichiers .log chiffrés temporaires)
+├── tokenizer/
+│   ├── tokenizer.py      # Traitement de données en blocs IAcoin
+│   └── registry.json     # Dictionnaire/tokenmap des envois
+├── static/               # (si tu veux y mettre effets matrix / images)
+├── server.py             # Point d’entrée principal Flask
+└── requirements.txt
+
+Flask
+cryptography
+requests
+pip install -r requirements.txt
+python server.py
+ia_sandbox_project/
+├── app/
+│   ├── __init__.py
+│   ├── routes.py
+│   ├── core.py
+│   ├── cloud.py
+│   ├── crypto.py
+│   └── utils.py
+├── tokenizer/
+│   ├── tokenizer.py
+│   └── registry.json
+├── templates/
+│   └── index.html
+├── semi_cloud/
+├── server.py
+└── requirements.txt
+from flask import Flask
+
+def create_app():
+    app = Flask(__name__, template_folder="../templates")
+    from app.routes import main_bp
+    app.register_blueprint(main_bp)
+    return app
+from flask import Blueprint, request, jsonify, render_template
+from app.core import init_node, send_data, get_nodes, get_logs
+from app.cloud import push_cloud, is_online
+from app.crypto import encrypt_and_store
+
+main_bp = Blueprint('main', __name__)
+
+@main_bp.route("/")
+def index():
+    return render_template("index.html")
+
+@main_bp.route("/init_node", methods=["POST"])
+def route_init():
+    return jsonify(init_node())
+
+@main_bp.route("/send_data", methods=["POST"])
+def route_send():
+    data = request.json
+    nid = data["id"]
+    size = data["size"]
+    enc = encrypt_and_store(nid, size)
+    return jsonify({"status": "ok", "balance": get_nodes()[nid]["balance"], "encrypted": True})
+
+@main_bp.route("/nodes")
+def route_nodes():
+    return jsonify(get_nodes())
+
+@main_bp.route("/logs")
+def route_logs():
+    return jsonify(get_logs())
+
+@main_bp.route("/push_cloud", methods=["POST"])
+def route_push():
+    res = push_cloud()
+    return jsonify(res)
+import uuid, time
+from app.utils import log
+from app.crypto import crypto, store_encrypted
+nodes = {}
+
+def init_node():
+    identity = str(uuid.uuid4())[:8]
+    nodes[identity] = {"balance": 0}
+    log(f"Nœud {identity} initialisé")
+    return nodes[identity]
+
+def send_data(nid, size):
+    nodes[nid]["balance"] += size * 0.001
+    log(f"Data de {size} ko reçue pour {nid}, nouveau solde : {nodes[nid]['balance']:.4f}")
+    encrypted = store_encrypted(nid, size)
+    return encrypted
+
+def get_nodes():
+    return nodes
+
+def get_logs():
+    from app.utils import logs
+    return logs
+import os
+import base64
+from cryptography.fernet import Fernet
+from app.utils import log
+
+CLOUD = "semi_cloud"
+os.makedirs(CLOUD, exist_ok=True)
+
+key = Fernet.generate_key()
+crypto = Fernet(key)
+
+def store_encrypted(nid, size):
+    data = f"{nid}:{size}:{time.time()}".encode()
+    token = crypto.encrypt(data)
+    fname = os.path.join(CLOUD, f"{nid}.log")
+    with open(fname, "ab") as f:
+        f.write(token + b"\n")
+    log(f"Écriture chiffrée dans {fname}")
+    return True
+import os, requests
+from app.crypto import CLOUD
+from app.utils import log
+
+def is_online():
+    try:
+        requests.head("https://example.com", timeout=3)
+        return True
+    except:
+        return False
+
+def push_cloud():
+    if not is_online():
+        log("🌐 Hors ligne, push différé")
+        return {"status": "deferred"}
+
+    for fname in os.listdir(CLOUD):
+        path = os.path.join(CLOUD, fname)
+        with open(path, "rb") as f:
+            data = f.read()
+            requests.post("https://ton-cloud.com/api/upload", data=data)
+        os.remove(path)
+        log(f"🌩️ Envoyé {fname} au cloud et supprimé")
+    return {"status": "pushed"}
+import time
+logs = []
+
+def log(msg):
+    logs.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
+    if len(logs) > 100:
+        logs.pop(0)
+import json, os
+from datetime import datetime
+
+REG = "tokenizer/registry.json"
+
+def load_registry():
+    if os.path.exists(REG):
+        return json.load(open(REG))
+    else:
+        return {"tokens": [], "count": 0}
+
+def save_registry(reg):
+    json.dump(reg, open(REG, "w"), indent=2)
+
+def tokenize_entry(nid, size):
+    reg = load_registry()
+    token = {
+        "id": nid,
+        "size": size,
+        "timestamp": datetime.now().isoformat()
+    }
+    reg["tokens"].append(token)
+    reg["count"] = len(reg["tokens"])
+    save_registry(reg)
+    return token
+from app import create_app
+app = create_app()
+
+if __name__=="__main__":
+    app.run(debug=True, host="0.0.0.0", port=9090)
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><title>Sandbox IAcoin Admin</title>
+<style>body{font-family:monospace;background:#111;color:#0f0}button{margin:5px;}</style>
+</head><body>
+<h1>Sandbox IAcoin Admin Console</h1>
+<button onclick="init()">Init Node</button>
+<button onclick="send()">Send Data</button>
+<button onclick="document.location.reload()">Refresh</button>
+<button onclick="push()">Push Cloud</button>
+<pre id="nodes"></pre><pre id="logs"></pre>
+<script>
+let nid="";
+async function init(){
+  const r = await fetch("/init_node",{method:"POST"}).then(r=>r.json());
+  nid = Object.keys(r)[0] || Object.keys(r)[0]? Object.keys(r)[0] : null;
+  update();
+}
+async function send(){
+  if(!nid){alert("Init d'abord");return;}
+  const size=Math.floor(Math.random()*500+100);
+  await fetch("/send_data",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:nid,size})});
+  update();
+}
+async function push(){
+  const r = await fetch("/push_cloud",{method:"POST"}).then(r=>r.json());
+  alert("Push status: "+r.status);
+  update();
+}
+async function update(){
+  const [nodes, logs] = await Promise.all([fetch("/nodes"), fetch("/logs")]).then(r=>Promise.all(r.map(x=>x.json())));
+  document.getElementById("nodes").innerText = JSON.stringify(nodes,null,2);
+  document.getElementById("logs").innerText = logs.join("\n");
+}
+setInterval(update,2000);
+</script>
+const fs = require('fs');
+const path = require('path');
+const WebSocket = require('ws');
+const express = require('express');
+
+const app = express();
+const port = 7000;
+
+// Middleware pour servir les fichiers HTML/JS/CSS
+app.use(express.static(path.join(__dirname, 'pages')));
+
+// API locale pour données dynamiques (JSON)
+app.get('/api/data', (req, res) => {
+  res.json({ message: 'Contenu local dynamique' });
+});
+
+// Lancement du serveur HTTP (local, utilisable en webview mobile)
+const server = app.listen(port, () => {
+  console.log(`Serveur local lancé sur http://localhost:${port}`);
+});
+
+// WebSocket pour éviter HTTP dans certains cas
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', function connection(ws) {
+  console.log('Client connecté via WebSocket');
+  ws.send(JSON.stringify({ message: 'Connexion WebSocket établie' }));
+});
+
+webView.loadUrl("file:///android_asset/index.html");
+
+webView.load(URLRequest(url: Bundle.main.url(forResource: "index", withExtension: "html")!))
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Page locale</title>
+</head>
+<body>
+  <h1>Bienvenue dans l'app locale</h1>
+  <button onclick="fetchData()">Charger données</button>
+  <div id="data"></div>
+
+  <script>
+    function fetchData() {
+      fetch('/api/data')
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('data').innerText = data.message;
+        });
+    }
+
+    // Connexion WebSocket
+    const socket = new WebSocket('ws://localhost:7000');
+    socket.onmessage = function(event) {
+      console.log("WebSocket :", event.data);
+    }
+  </script>
+
+npm install react-native-webview
+
+my-local-api-app/
+├── assets/
+│   └── index.html
+├── App.js
+├── package.json
+└── local-websocket-server.js
+<!-- assets/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>App locale</title>
+  <script>
+    let ws;
+
+    function init() {
+      ws = new WebSocket("ws://localhost:7000");
+
+      ws.onopen = () => {
+        ws.send("Hello from HTML!");
+      };
+
+      ws.onmessage = (event) => {
+        document.getElementById("output").innerText = event.data;
+      };
+    }
+
+    window.onload = init;
+  </script>
+</head>
+<body>
+  <h1>Bienvenue dans l'app React Native</h1>
+  <div id="output">Attente des données...</div>
+</body>
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 7000 });
+
+wss.on('connection', function connection(ws) {
+  console.log('Client connecté');
+  ws.on('message', function incoming(message) {
+    console.log('Reçu:', message);
+    ws.send('Réponse dynamique depuis API locale');
+  });
+});
+// App.js
+import React from 'react';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import { WebView } from 'react-native-webview';
+import * as FileSystem from 'expo-file-system';
+
+export default function App() {
+  const htmlUri = Platform.OS === 'android'
+    ? 'file:///android_asset/index.html'
+    : `${FileSystem.bundleDirectory}assets/index.html`;
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.header}>App Mobile - API Locale</Text>
+      <WebView source={{ uri: htmlUri }} style={styles.webview} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, marginTop: 40 },
+  header: { textAlign: 'center', fontSize: 20, marginBottom: 10 },
+  webview: { flex: 1 }
+});
+📱 App React Native (WebView locale)
+   └── 📡 WebSocket local
+        └── 📦 Docker intelligent (scan/analyse)
+            ├── 🧠 Analyse IA locale ou distante
+            └── 🌍 Connexion réseau vers :
+                 - Cloud / VPN / Tunnel SSH
+                 - Backend surveillé
+                 - Autres appareils (non-localhost)
+# Dockerfile
+FROM node:20-alpine
+WORKDIR /app
+
+COPY . .
+
+RUN npm install
+
+EXPOSE 7000
+
+CMD ["node", "docker-scanner.js"]
+const WebSocket = require('ws');
+const fs = require('fs');
+
+const LOCAL_PORT = 7000;
+const REMOTE_URL = "wss://ton-serveur-cloud.com:443";
+
+const wss = new WebSocket.Server({ port: LOCAL_PORT });
+
+wss.on('connection', (client) => {
+  console.log("Client WebSocket connecté localement.");
+
+  client.on('message', (msg) => {
+    console.log("Data reçue :", msg);
+
+    // Analyse locale
+    const result = scanData(msg);
+
+    // Envoi réseau vers serveur distant
+    forwardToRemote(result);
+  });
+});
+
+function scanData(data) {
+  // Simule analyse IA (à remplacer par TensorFlow.js ou autre)
+  return JSON.stringify({
+    original: data,
+    detected: data.includes("danger") ? "anomaly" : "normal",
+    timestamp: Date.now()
+  });
+}
+
+function forwardToRemote(data) {
+  const socket = new WebSocket(REMOTE_URL);
+  socket.on('open', () => {
+    socket.send(data);
+    socket.close();
+  });
+}
+const socket = new WebSocket("ws://192.168.X.X:7000");
+
+socket.onopen = () => {
+  socket.send("scan_this_payload");
+};
+
+socket.onmessage = (e) => {
+  console.log("Résultat du scan :", e.data);
+};
+// remote-server.js (cloud)
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 443 });
+
+wss.on('connection', (ws) => {
+  ws.on('message', (msg) => {
+    console.log("Scan reçu :", msg);
+    // Stocker, logger, alerter...
+  });
+});
+📱 App React Native
+   └── 📡 WebSocket local
+        └── 🧠 Docker Scanner (Docker A)
+             ├── 🔌 Port de sortie externe : :7500
+             └── ➡️ Envoi vers Proxy Négatif (Docker B)
+                          └── Redirection dynamique vers :
+                              - Serveurs
+                              - Navigateur cible
+                              - Réseau P2P décentralisé
+const WebSocket = require('ws');
+const net = require('net');
+
+const SCAN_PORT = 7000;
+const OUTPUT_PORT = 7500;
+
+const scannerSocket = new WebSocket.Server({ port: SCAN_PORT });
+
+scannerSocket.on('connection', (client) => {
+  client.on('message', (msg) => {
+    const scanned = scan(msg);
+    forwardToProxy(scanned);
+  });
+});
+
+function scan(input) {
+  return JSON.stringify({
+    original: input,
+    result: input.includes("x") ? "block" : "allow",
+    time: new Date().toISOString()
+  });
+}
+
+function forwardToProxy(data) {
+  const client = new net.Socket();
+  client.connect(OUTPUT_PORT, 'proxy-b', () => {
+    client.write(data);
+    client.end();
+  });
+}
+FROM node:20
+WORKDIR /app
+COPY . .
+RUN npm install
+EXPOSE 7000 7500
+CMD ["node", "docker-scanner.js"]
+const net = require('net');
+
+const server = net.createServer((socket) => {
+  socket.on('data', (data) => {
+    const payload = data.toString();
+    const parsed = JSON.parse(payload);
+
+    console.log("Analyse proxy :", parsed);
+
+    if (parsed.result === "block") {
+      console.log("Bloqué : rien envoyé");
+    } else {
+      sendToRemote(payload);
+    }
+  });
+});
+
+function sendToRemote(payload) {
+  const client = new net.Socket();
+  client.connect(443, 'serveur.final.com', () => {
+    client.write(payload);
+    client.end();
+  });
+}
+
+server.listen(7500, () => {
+  console.log("Proxy négatif en écoute sur port 7500");
+});
+[
+  { "host": "192.168.1.21", "port": 7500 },
+  { "host": "192.168.1.22", "port": 7500 }
+]
+const fs = require('fs');
+const peers = JSON.parse(fs.readFileSync('peers.json', 'utf8'));
+
+function sendToPeers(data) {
+  for (const peer of peers) {
+    const socket = new net.Socket();
+    socket.connect(peer.port, peer.host, () => {
+      socket.write(data);
+      socket.end();
+    });
+  }
+}
+
+</html>
+
