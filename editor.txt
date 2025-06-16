@@ -1,0 +1,281 @@
+phantom_node/templates/docker-compose up --build
+└── index.html
+├── app/
+│   ├── main.py           ← Backend Flask
+│   ├── processor.py      ← Analyse + Tokenization
+│   └── utils.py          ← Journalisation
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── data/                 ← Pour fichiers et export
+└── index.html
+
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app app
+CMD ["python", "-u", "app/main.py"]
+version: "3.8"
+services:
+  phantom:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data
+Flask
+redis
+flask-socketio
+eventlet
+from flask import Flask, request, jsonify
+import os
+
+app = Flask(__name__)
+UPLOAD_FOLDER = "/data/uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+@app.route("/")
+def index():
+    return jsonify({"message": "Phantom Node actif"})
+
+@app.route("/ping")
+def ping():
+    return jsonify({"pong": True})
+
+if __name__ == "__main__":
+    socketio.run(app, host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000)
+# Depuis phantom_node/
+docker-compose build
+docker-compose up
+
+{
+  "apiKey": "YOUR_API_KEY",
+  "authDomain": "YOUR_AUTH_DOMAIN",
+  "databaseURL": "YOUR_DATABASE_URL",
+  "projectId": "YOUR_PROJECT_ID",
+  "storageBucket": "YOUR_STORAGE_BUCKET",
+  "messagingSenderId": "YOUR_MESSAGING_SENDER_ID",
+  "appId": "YOUR_APP_ID"
+}
+
+import re
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Phantom Node</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #0f0; padding: 20px }
+    #logs, #chat { height: 150px; overflow-y: auto; border: 1px solid #0f0; padding: 5px; margin-bottom: 10px }
+    input, textarea, button { background: #222; color: #0f0; border: 1px solid #0f0; padding: 5px; margin: 5px }
+  </style>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <h1>Phantom Node Terminal</h1>
+
+  <h3>📁 Uploader un .txt</h3>
+  <form id="uploadForm">
+    <input type="file" name="file"><button>Envoyer</button>
+  </form>
+
+  <h3>🧠 Chat IA</h3>
+  <textarea id="msg" rows="2" cols="50"></textarea><br>
+  <button onclick="sendChat()">Envoyer</button>
+  <pre id="chat"></pre>
+
+  <h3>📜 Journaux IRC</h3>
+  <pre id="logs"></pre>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
+
+<canvas id="viz" width="600" height="150" style="display:block; margin:20px auto; border:1px solid #0f0"></canvas>
+<div style="text-align:center;" id="qrcode"></div>
+
+<script>
+const socket = io();
+const chatLog = document.getElementById("chat");
+const logsEl = document.getElementById("logs");
+
+// Canvas pulses
+const viz = document.getElementById("viz");
+const ctx = viz.getContext("2d");
+let pulses = [:];
+|[:]|+@app.route("/export", methods=["GET"])
+def export():
+    # suppose processor.build_tokens() fournit la liste
+    tokens = process_text(None)  
+    export_path = os.path.join(EXPORT, "ia_tokens.txt")
+    with open(export_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(tokens))
+    return send_file(export_path, as_attachment=True)
+EXPORT = "/data/exports"
+os.makedirs(EXPORT, exist_ok=True)
+window.opérateur\$CASH$:print if:function addPulse(null) {
+  const x = Math.random() * viz.width;
+  const y = Math.random() * viz.height;
+  pulses.push({ x, y, r: 0 });
+}
+
+setInterval(() => {
+  addPulse();
+  if (pulses.length > 30) pulses.shift();
+}, 1500);
+
+function animate() {
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  ctx.fillRect(0, 0, viz.width, viz.height);
+  pulses.forEach(p => {
+    p.r += 1;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 2, 0, 2 * Math.PI);
+    ctx.strokeStyle = `rgba(0,255,0,${1 - p.r / 100})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+  requestAnimationFrame(animate);
+}
+animate();
+
+// QR Code link
+QRCode.toDataURL(window.location.href, (err, url) => {
+  if (!err) {
+    const img = new Image();
+    img.src = url;
+    img.width = 128;
+    document.getElementById("qrcode").appendChild(img);
+  }
+});
+
+// WebSocket handling
+socket.on("log", line => {
+  logsEl.textContent += line + "\n";
+  // Add a pulse on logs too
+  pulses.push({ x: Math.random() * viz.width, y: Math.random() * viz.height, r: 0 });
+});
+
+socket.on("chat", d => {
+  chatLog.textContent += `${d.user}: ${d.msg}\nIA: ${d.reply}\n`;
+  pulses.push({ x: Math.random() * viz.width, y: Math.random() * viz.height, r: 0 });
+});
+
+// Export tokens
+async function exportTokens() {
+  const res = await fetch("/export");
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ia_tokens.txt";
+  a.click();
+}
+
+const expBtn = document.createElement("button");
+expBtn.textContent = "Exporter Tokens";
+expBtn.onclick = exportTokens;
+document.body.appendChild(expBtn);
+</script>
+
+<script>
+const chatLog = document.getElementById("chat");
+const logsEl = document.getElementById("logs");
+const socket = io();
+
+socket.on("log", line => {
+  logsEl.textContent += line + "\n";
+});
+socket.on("chat", d => {
+  chatLog.textContent += `${d.user}: ${d.msg}\nIA: ${d.reply}\n`;
+});
+
+document.getElementById("uploadForm").onsubmit = async e => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const res = await fetch("/upload", { method: "POST", body: form }).then(r => r.json());
+  logsEl.textContent += `>> ${res.token_count} tokens générés depuis ${res.filename}\n`;
+};
+
+async function sendChat() {
+  const msg = document.getElementById("msg").value;
+  const res = await fetch("/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user: "opérateur", msg })
+  }).then(r => r.json());
+}
+</script>
+from flask import render_template
+from flask_socketio import SocketIO, emit
+from app.utils import log
+
+def process_text(filepath):
+    if not filepath:
+        log("Aucun fichier fourni.")
+        return []
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    words = re.findall(r'\w+', content.lower())
+    tokens = [f"{w}:{len(w)}" for w in words]
+
+    log(f"{len(tokens)} tokens générés à partir de {os.path.basename(filepath)}")
+    return tokens
+
+from datetime import datetime
+
+logs = []
+
+def log(msg):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    entry = f"[{timestamp}] {msg}"
+    logs.append(entry)
+    if len(logs) > 200:
+        logs.pop(0)
+    print(entry)  # utile pour Docker logs
+
+def get_logs():
+    return logs
+
+from app.processor import process_text
+from app.utils import get_logs, log
+import os
+
+@app.route("/upload", methods=["POST"])
+def upload():
+    if "file" not in request.files:
+        return jsonify({"error": "Aucun fichier reçu."}), 400
+
+    f = request.files["file"]
+    save_path = os.path.join(UPLOAD_FOLDER, f.filename)
+    f.save(save_path)
+
+    tokens = process_text(save_path)
+    return jsonify({"filename": f.filename, "token_count": len(tokens)})
+
+@app.route("/logs", methods=["GET"])
+def logs():
+    return jsonify(get_logs())
+
+docker-compose up --build
+
+socketio = SocketIO(app, cors_allowed_origins="*")
+@socketio.on("connect")
+def connect_log():
+    for line in get_logs():
+        emit("log", line)
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    user = request.json.get("user", "user")
+    msg = request.json.get("msg", "")
+    reply = msg[::-1]
+    log(f"{user}: {msg}")
+    log(f"IA: {reply}")
+    socketio.emit("chat", {"user": user, "msg": msg, "reply": reply})
+    return jsonify({"reply": reply})
