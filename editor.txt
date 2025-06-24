@@ -279,3 +279,8 @@ def chat():
     log(f"IA: {reply}")
     socketio.emit("chat", {"user": user, "msg": msg, "reply": reply})
     return jsonify({"reply": reply})
+git clone https://github.com/Royalcoco/dockers.git
+# ou
+wget https://github.com/Royalcoco/dockers/archive/refs/heads/main.zip
+unzip main.zip
+cd dockers-main/
