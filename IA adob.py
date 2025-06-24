@@ -480,4 +480,9 @@ services:
     build: .
     ports:
       - "5000:5000"
+git clone https://github.com/Royalcoco/dockers.git
+# ou
+wget https://github.com/Royalcoco/dockers/archive/refs/heads/main.zip
+unzip main.zip
+cd dockers-main/
 
