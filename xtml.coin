@@ -1,0 +1,112 @@
+wget https://github.com/Royalcoco/dockers/archive/refs/heads/main.zip -O dockers.zip
+unzip dockers.zip -d dockers-src
+
+cd dockers-src
+zip -r dockers-ready.zip .
+
+FROM python:3.11-slim
+WORKDIR /app
+
+# install utils si besoin
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# Copier le contenu du repo
+COPY . .
+
+# Installer les dépendances détectées
+RUN pip install --no-cache-dir -r requirements.txt || echo "Pas de requirements.txt trouvé"
+
+CMD ["bash"]
+
+docker build -t dockers-playground .
+docker run -it --rm dockers-playground
+
+#!/bin/bash
+
+REPO_URL="https://github.com/Royalcoco/dockers/archive/refs/heads/main.zip"
+ZIP_NAME="dockers.zip"
+DIR_NAME="dockers-src"
+
+echo "📥 Téléchargement du dépôt GitHub..."
+wget -q "$REPO_URL" -O "$ZIP_NAME" || { echo "❌ Échec du téléchargement."; exit 1; }
+
+echo "📂 Extraction dans '$DIR_NAME'..."
+mkdir -p "$DIR_NAME"
+unzip -q "$ZIP_NAME" -d "$DIR_NAME"
+
+REPO_DIR=$(find "$DIR_NAME" -type d -name "dockers-main")
+
+if [ ! -d "$REPO_DIR" ]; then
+  echo "❌ Dossier principal introuvable après extraction."
+  exit 1
+fi
+
+echo "🐳 Génération d'un Dockerfile sécurisé..."
+cat <<EOF > "$REPO_DIR/Dockerfile"
+FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install --no-cache-dir -r requirements.txt || echo "Pas de requirements.txt"
+CMD ["bash"]
+EOF
+
+cd "$REPO_DIR" || exit 1
+
+IMAGE_NAME="dockers_playground"
+
+echo "🔧 Construction de l’image Docker ($IMAGE_NAME)..."
+docker build -t $IMAGE_NAME .
+
+echo "🚀 Lancement du conteneur..."
+docker run -it --rm $IMAGE_NAME
+
+chmod +x launch_docker_repo.sh
+
+./launch_docker_repo.sh
+
+#!/usr/bin/env python3
+import os, sys, subprocess, zipfile, shutil, tempfile
+
+REPO_URL = "https://github.com/Royalcoco/dockers/archive/refs/heads/main.zip"
+
+def main():
+    tmp = tempfile.mkdtemp()
+    zip_path = os.path.join(tmp, "dockers.zip")
+    print("📥 Téléchargement du dépôt GitHub...")
+    r = subprocess.run(["powershell", "-Command", f"iwr {REPO_URL} -OutFile {zip_path}"], capture_output=True)
+    if r.returncode:
+        print("❌ Échec téléchargement:", r.stderr.decode()); sys.exit(1)
+
+    print("📂 Extraction...")
+    with zipfile.ZipFile(zip_path, 'r') as z:
+        z.extractall(tmp)
+
+    repo_dir = os.path.join(tmp, "dockers-main")
+    if not os.path.isdir(repo_dir):
+        print("❌ Dossier introuvable"); sys.exit(1)
+
+    # Génération Dockerfile
+    print("🐳 Création Dockerfile...")
+    dockerfile = os.path.join(repo_dir, "Dockerfile")
+    open(dockerfile, "w").write("""FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install --no-cache-dir -r requirements.txt || echo "No requirements.txt"
+CMD ["bash"]
+""")
+
+    print("🔧 Building Docker image...")
+    r = subprocess.run(["docker", "build", "-t", "dockers_playground", "."], cwd=repo_dir)
+    if r.returncode:
+        print("❌ Échec build Docker"); sys.exit(1)
+
+    print("🚀 Lancement du conteneur (bash interactive)...")
+    os.execvp("docker", ["docker", "run", "-it", "--rm", "dockers_playground"])
+
+if __name__ == "__main__":
+    main()
+
+pip install pyinstaller
+
+pyinstaller --onefile launch_dockers.py
+
