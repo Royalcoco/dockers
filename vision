@@ -1,0 +1,179 @@
+iaethics/
+├── app/
+│   ├── main.py           # Serveur Flask + WebSocket
+│   ├── economy.py        # Logique économique IAcoin
+│   └── utils.py          # Logs & données utilisateurs
+├── templates/
+│   └── index.html        # Interface web
+├── static/
+│   └── style.css
+├── requirements.txt
+├── Dockerfile
+└── docker-compose.yml
+
+import random, threading, time
+from .utils import log, get_users, update_balance
+
+MARKET_PRICE = 10.0  # Valeur de 1 IAcoin
+REDISTRIBUTION_POOL = "POOL"
+
+def simulate_transaction(sender, amount):
+    cost = amount * MARKET_PRICE
+    paid = random.choice([True, False])
+    if not paid:
+        log(f"Transaction null par {sender} de {amount} IAcoin")
+        redistribute(amount)
+        return {"status":"null","amount":amount, "to":"POOL"}
+    else:
+        log(f"{sender} a payé {amount} IAcoin ({cost} $)")
+        update_balance(sender, -amount)
+        return {"status":"ok", "amount":amount}
+    
+def redistribute(amount):
+    users = get_users()
+    targets = [u for u in users if get_users()[u]["debt"] > get_users()[u]["balance"]]
+    if not targets:
+        log("Aucun débiteur identifié")
+        return
+    share = amount / len(targets)
+    for u in targets:
+        update_balance(u, share)
+        log(f"{u} reçoit {share:.2f} IAcoin du pool redistribution")
+
+from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO, emit
+import threading, time
+from .economy import simulate_transaction
+from .utils import log, get_logs, get_users, add_user
+
+app = Flask(__name__, template_folder="../templates", static_folder="../static")
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/add_user", methods=["POST"])
+def add():
+    name = request.json["name"]
+    debt = float(request.json.get("debt",0))
+    add_user(name, debt)
+    return jsonify(get_users())
+
+@app.route("/users")
+def users():
+    return jsonify(get_users())
+
+@app.route("/tx", methods=["POST"])
+def tx():
+    sender = request.json["user"]
+    amount = float(request.json["amount"])
+    result = simulate_transaction(sender, amount)
+    socketio.emit("tx", result)
+    return jsonify(result)
+
+@app.route("/logs")
+def logs():
+    return jsonify(get_logs())
+
+@socketio.on("connect")
+def c():
+    emit("logs", get_logs())
+    emit("users", get_users())
+
+if __name__=="__main__":
+    socketio.run(app, host="0.0.0.0", port=5000)
+from datetime import datetime
+
+users = {}
+logs = []
+
+def log(msg):
+    ts = datetime.now().strftime("%H:%M:%S")
+    logs.append(f"[{ts}] {msg}")
+    if len(logs)>200: logs.pop(0)
+
+def get_logs(): return logs
+def get_users(): return users
+
+def add_user(name, debt=0.0):
+    users[name] = {"balance":0.0, "debt":debt}
+
+def update_balance(name, delta):
+    users[name]["balance"] = users[name].get("balance",0)+delta
+
+<!DOCTYPE html><html><head>
+<meta charset="UTF-8"><title>IAcoin Éthique Hub</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head><body>
+<h1>IAcoin Éthique Hub</h1>
+
+<div>
+  <input id="name" placeholder="Nom"> <input id="debt" placeholder="Dette initiale">
+  <button onclick="addUser()">Ajouter utilisateur</button>
+</div>
+<ul id="users"></ul>
+
+<div>
+  <select id="u_tx"></select>
+  <input id="amount" placeholder="Montant IAcoin">
+  <button onclick="sendTx()">Effectuer transaction</button>
+</div>
+
+<pre id="txlog"></pre>
+<pre id="logs"></pre>
+
+<script>
+const socket = io();
+socket.on("logs", l=>document.getElementById("logs").innerText = l.join("\n"));
+socket.on("users", u=>{
+  const el = document.getElementById("users");
+  const sel = document.getElementById("u_tx");
+  el.innerHTML=""; sel.innerHTML="";
+  for(let [n,v] of Object.entries(u)){
+    el.innerHTML+=`<li>${n}: ${v.balance.toFixed(2)} IAcoin, debt=${v.debt}</li>`;
+    sel.innerHTML+=`<option>${n}</option>`;
+  }
+});
+socket.on("tx", t=> {
+  document.getElementById("txlog").innerText += JSON.stringify(t)+"\n";
+});
+
+async function addUser(){
+  await fetch("/add_user",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({name:document.getElementById("name").value, debt:document.getElementById("debt").value})
+  });
+}
+async function sendTx(){
+  await fetch("/tx",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({user:document.getElementById("u_tx").value, amount:document.getElementById("amount").value})
+  });
+}
+</script>
+</body></html>
+
+body{background:#111;color:#0f0;font-family:monospace;padding:10px}
+input,button,select{background:#222;color:#0f0;border:1px solid #0f0;margin:3px;padding:5px}
+pre{background:#000;color:#0f0;border:1px solid #0f0;height:200px;overflow-y:auto;padding:10px}
+
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY app app
+COPY templates templates
+COPY static static
+CMD ["python","-u","app/main.py"]
+
+Flask
+flask-socketio
+eventlet
+
+version: "3.8"
+services:
+  hub:
+    build: .
+    ports: ["5000:5000"]
+
+docker compose up --build
