@@ -1,0 +1,147 @@
+iacrypto/
+├── app/
+│   ├── main.py           # Serveur Flask + WebSocket
+│   ├── market.py         # Logique de simulation du marché
+│   └── utils.py          # Logs & portefeuilles
+├── templates/
+│   └── index.html        # Dashboard Web
+├── static/
+│   └── style.css
+├── requirements.txt
+├── Dockerfile
+└── docker-compose.yml
+
+import random
+from .utils import log, get_wallet, update_wallet
+
+CRYPTO_LIST = ["BTC","ETH","DOGE","IAcoin"]
+BASE_PRICES = {c: random.uniform(50, 150) for c in CRYPTO_LIST}
+
+def random_walk(prices):
+    for c in prices:
+        change = random.uniform(-5,5)
+        prices[c] = max(0.1, prices[c] + change)
+    return prices
+
+def detect_opportunity(prices, prev_prices):
+    opp = []
+    for c in CRYPTO_LIST:
+        if prices[c] < prev_prices[c] * 0.95 or prices[c] > prev_prices[c] * 1.05:
+            opp.append(c)
+    return opp
+
+def simulate_step(state):
+    prev = state["prices"].copy()
+    new = random_walk(state["prices"])
+    opp = detect_opportunity(new, prev)
+    return prev, new, opp
+
+def compensate(opportunities, state):
+    for c in opportunities:
+        wallet = get_wallet("IA")
+        amount = 1
+        if state["prices"][c] < state["prices"][c]:
+            # Achat
+            update_wallet("IA", c, amount)
+            log(f"IA achète {amount} {c} à {state['prices'][c]:.2f}$")
+        else:
+            # Vente
+            update_wallet("IA", c, -amount)
+            log(f"IA vend {amount} {c} à {state['prices'][c]:.2f}$")
+
+from datetime import datetime
+
+wallets = {"IA": {c:0 for c in ["BTC","ETH","DOGE","IAcoin"]}}
+logs=[]
+
+def log(msg):
+    ts=datetime.now().strftime("%H:%M:%S")
+    logs.append(f"[{ts}] {msg}")
+    if len(logs)>200: logs.pop(0)
+
+def get_logs(): return logs
+def get_wallet(user): return wallets.setdefault(user, dict(wallets["IA"]))
+def update_wallet(user,c,delta): get_wallet(user)[c]+=delta
+
+from flask import Flask, render_template, jsonify
+from flask_socketio import SocketIO, emit
+from .market import simulate_step, compensate
+from .utils import log, get_logs, get_wallet
+
+app=Flask(__name__,template_folder="../templates",static_folder="../static")
+socketio=SocketIO(app, cors_allowed_origins="*")
+
+state={"prices":{c:random.uniform(50,150) for c in ["BTC","ETH","DOGE","IAcoin"]}}
+
+@app.route("/") 
+def index(): return render_template("index.html")
+
+@app.route("/wallet/<user>")
+def wallet(user):
+    return jsonify(get_wallet(user))
+
+@socketio.on("connect")
+def send_init():
+    emit("logs", get_logs())
+    emit("prices", state["prices"])
+    emit("wallet", get_wallet("IA"))
+
+def simulate():
+    prev,new,opp=simulate_step(state)
+    log(f"Prix : {new}")
+    if opp:
+        compensate(opp, state)
+    socketio.emit("prices", new)
+    socketio.emit("wallet", get_wallet("IA"))
+    socketio.emit("logs", get_logs())
+
+def sim_loop():
+    import time
+    while True:
+        time.sleep(5)
+        simulate()
+
+import threading
+threading.Thread(target=sim_loop,daemon=True).start()
+
+if __name__=="__main__":
+    socketio.run(app, host="0.0.0.0",port=5000)
+
+<!DOCTYPE html><html><head>
+<meta charset="UTF-8"><title>IAcoin Market</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head><body>
+<h1>Marché IAcoin Simulé</h1>
+<pre id="prices"></pre>
+<pre id="wallet"></pre>
+<pre id="logs"></pre>
+<script>
+const socket=io();
+socket.on("prices",p=>document.getElementById("prices").innerText="Prix: "+JSON.stringify(p,null,2));
+socket.on("wallet",w=>document.getElementById("wallet").innerText="IA Wallet: "+JSON.stringify(w,null,2));
+socket.on("logs",l=>document.getElementById("logs").innerText=l.join("\n"));
+</script>
+</body></html>
+
+body{background:#111;color:#0f0;font-family:monospace;padding:10px}
+pre{background:#000;color:#0f0;border:1px solid #0f0;padding:10px;height:200px;overflow-y:auto}
+
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY app app
+COPY templates templates
+COPY static static
+CMD ["python","-u","app/main.py"]
+
+version:"3.8"
+services:
+  market:
+    build: .
+    ports:["5000:5000"]
+
+docker compose up --build
+
+
