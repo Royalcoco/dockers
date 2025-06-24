@@ -1,0 +1,272 @@
+def create_beacon(identifier="A1"):
+    bin_data = ''.join(format(ord(char), '08b') for char in identifier)
+    return bin_data
+
+print("Balise binaire envoyée :", create_beacon("BEACON"))
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def modulate_bpsk(data):
+    # Simule un signal BPSK pour ligne AC
+    t = np.linspace(0, 1, len(data)*1000)
+    freq = 50  # fréquence du courant secteur (Hz)
+    carrier = np.cos(2 * np.pi * freq * t)
+    bits = np.array([int(b) for b in data])
+    modulated = carrier * np.repeat(2*bits-1, 1000)
+    return t, modulated
+
+binary = create_beacon("B1")
+t, signal = modulate_bpsk(binary)
+plt.plot(t[:1000], signal[:1000])  # visualisation d’un signal AC modifié
+plt.title("Signal modulé (BPSK sur AC)")
+plt.show()
+
+class DigitalBeacon:
+    def __init__(self, id="BX01"):
+        self.id = id
+        self.binary = self.encode_binary(id)
+
+    def encode_binary(self, text):
+        return ''.join(format(ord(c), '08b') for c in text)
+
+    def simulate_output(self):
+        print(f"[BEACON-{self.id}] Signal : {self.binary}")
+        print("→ Injection : courant → modulateur → interface antenne")
+        print("→ Capturable par : antenne RF / wifi sniff / 5G SDR / CPL")
+
+    def visualize(self):
+        import numpy as np
+        import matplotlib.pyplot as plt
+        t = np.linspace(0, 1, len(self.binary)*1000)
+        carrier = np.cos(2 * np.pi * 50 * t)
+        modulated = carrier * np.repeat([2*int(b)-1 for b in self.binary], 1000)
+        plt.plot(t[:1000], modulated[:1000])
+        plt.title(f"Signal binaire [{self.id}] sur port simulé")
+        plt.show()
+
+# Exemple
+beacon = DigitalBeacon("SYNC")
+beacon.simulate_output()
+beacon.visualize()
+
+BaliseNet/
+├── agent.py         # Envoie et réception de balises
+├── config.yaml      # Configuration réseau
+├── processor.py     # Simulation des "cylindres" qui traitent les flux
+├── utils.py         # Encodage, hash, formatage
+
+node_id: BX-001
+port: 5050
+broadcast_ip: 255.255.255.255
+interval_ms: 2000
+
+import hashlib
+
+def generate_binary_id(text):
+    return ''.join(format(ord(c), '08b') for c in text)
+
+def hash_id(text):
+    return hashlib.sha256(text.encode()).hexdigest()[:8]
+
+def process_flux(binary_data):
+    print("⟳ Cylindres tournent...")
+    split = [binary_data[i:i+8] for i in range(0, len(binary_data), 8)]
+    for i, block in enumerate(split):
+        mode = "droit" if i % 2 == 0 else "quinconce"
+        print(f"↻ Cylindre {i:02d} ({mode}) : {block}")
+
+import socket
+import time
+import yaml
+from utils import generate_binary_id, hash_id
+from processor import process_flux
+
+def load_config():
+    with open("config.yaml") as f:
+        return yaml.safe_load(f)
+
+def send_beacon(sock, config, binary):
+    sock.sendto(binary.encode(), (config["broadcast_ip"], config["port"]))
+    print(f"📤 Balise envoyée : {binary}")
+
+def listen_for_beacons(sock, my_id):
+    sock.settimeout(0.5)
+    try:
+        data, addr = sock.recvfrom(1024)
+        message = data.decode()
+        if my_id not in message:
+            print(f"📥 Balise reçue de {addr[0]} : {message}")
+            process_flux(message)
+    except socket.timeout:
+        pass
+
+def main():
+    config = load_config()
+    node_id = config["node_id"]
+    short_hash = hash_id(node_id)
+    binary_beacon = generate_binary_id(short_hash)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.bind(("", config["port"]))
+
+    while True:
+        send_beacon(sock, config, binary_beacon)
+        listen_for_beacons(sock, short_hash)
+        time.sleep(config["interval_ms"] / 1000)
+
+if __name__ == "__main__":
+    main()
+
+pip install pyyaml
+
+python agent.py
+
+# BaliseNet - agent.py
+
+import socket
+import time
+import yaml
+import hashlib
+
+# === utils.py ===
+def generate_binary_id(text):
+    return ''.join(format(ord(c), '08b') for c in text)
+
+def hash_id(text):
+    return hashlib.sha256(text.encode()).hexdigest()[:8]
+
+# === processor.py ===
+def process_flux(binary_data):
+    print("\n⟳ Cylindres tournent...")
+    split = [binary_data[i:i+8] for i in range(0, len(binary_data), 8)]
+    for i, block in enumerate(split):
+        mode = "droit" if i % 2 == 0 else "quinconce"
+        print(f"↻ Cylindre {i:02d} ({mode}) : {block}")
+
+# === Main Agent ===
+def load_config():
+    with open("config.yaml") as f:
+        return yaml.safe_load(f)
+
+def send_beacon(sock, config, binary):
+    sock.sendto(binary.encode(), (config["broadcast_ip"], config["port"]))
+    print(f"\n📤 Balise envoyée : {binary}")
+
+def listen_for_beacons(sock, my_id):
+    sock.settimeout(0.5)
+    try:
+        data, addr = sock.recvfrom(1024)
+        message = data.decode()
+        if my_id not in message:
+            print(f"📥 Balise reçue de {addr[0]} : {message}")
+            process_flux(message)
+    except socket.timeout:
+        pass
+
+def main():
+    config = load_config()
+    node_id = config["node_id"]
+    short_hash = hash_id(node_id)
+    binary_beacon = generate_binary_id(short_hash)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.bind(("", config["port"]))
+
+    print(f"🔧 BaliseNet Node '{node_id}' initialisée sur port {config['port']}\n")
+
+    while True:
+        send_beacon(sock, config, binary_beacon)
+        listen_for_beacons(sock, short_hash)
+        time.sleep(config["interval_ms"] / 1000)
+
+if __name__ == "__main__":
+    main()
+
+node_id: BX-001
+port: 5050
+broadcast_ip: 255.255.255.255
+interval_ms: 2000
+
+pip install pyyaml
+python agent.py
+
+# BaliseNet - agent.py
+
+import socket
+import time
+import yaml
+import hashlib
+
+# === utils.py ===
+def generate_binary_id(text):
+    return ''.join(format(ord(c), '08b') for c in text)
+
+def hash_id(text):
+    return hashlib.sha256(text.encode()).hexdigest()[:8]
+
+# === processor.py ===
+def process_flux(binary_data):
+    print("\n⟳ Cylindres tournent...")
+    split = [binary_data[i:i+8] for i in range(0, len(binary_data), 8)]
+    for i, block in enumerate(split):
+        mode = "droit" if i % 2 == 0 else "quinconce"
+        print(f"↻ Cylindre {i:02d} ({mode}) : {block}")
+
+# === config.yaml ===
+# Contenu de ce fichier à créer à côté de agent.py
+# ---
+# node_id: BX-001
+# port: 5050
+# broadcast_ip: 255.255.255.255
+# interval_ms: 2000
+
+# === Main Agent ===
+def load_config():
+    with open("config.yaml") as f:
+        return yaml.safe_load(f)
+
+def send_beacon(sock, config, binary):
+    sock.sendto(binary.encode(), (config["broadcast_ip"], config["port"]))
+    print(f"\n📤 Balise envoyée : {binary}")
+
+def listen_for_beacons(sock, my_id):
+    sock.settimeout(0.5)
+    try:
+        data, addr = sock.recvfrom(1024)
+        message = data.decode()
+        if my_id not in message:
+            print(f"📥 Balise reçue de {addr[0]} : {message}")
+            process_flux(message)
+    except socket.timeout:
+        pass
+
+def main():
+    config = load_config()
+    node_id = config["node_id"]
+    short_hash = hash_id(node_id)
+    binary_beacon = generate_binary_id(short_hash)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.bind(("", config["port"]))
+
+    print(f"🔧 BaliseNet Node '{node_id}' initialisée sur port {config['port']}\n")
+
+    while True:
+        send_beacon(sock, config, binary_beacon)
+        listen_for_beacons(sock, short_hash)
+        time.sleep(config["interval_ms"] / 1000)
+
+if __name__ == "__main__":
+    main()
+node_id: BX-001
+port: 5050
+broadcast_ip: 255.255.255.255
+interval_ms: 2000
+
+pip install pyyaml
+
+python agent.py
