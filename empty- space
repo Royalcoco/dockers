@@ -1,0 +1,134 @@
+Forex Stream (tick data) ──► Analyse IA ──► Détection de trou (latence, absence de preneur)
+                                              │
+                                              ▼
+                                 📉 Enregistre dette potentielle
+                                              │
+                                              ▼
+                             🔄 Réinjection IA dans flux sous forme de "balise transactionnelle"
+# BaliseNet - agent.py
+
+import socket
+import time
+import yaml
+import hashlib
+import base64
+import os
+import random
+
+# === utils.py ===
+def generate_binary_id(text):
+    return ''.join(format(ord(c), '08b') for c in text)
+
+def hash_id(text):
+    return hashlib.sha256(text.encode()).hexdigest()[:8]
+
+def encode_file_to_base64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+def decode_base64_to_file(data, path):
+    with open(path, "wb") as f:
+        f.write(base64.b64decode(data))
+
+# === processor.py ===
+def process_flux(binary_data):
+    print("\n⟳ Cylindres tournent...")
+    split = [binary_data[i:i+8] for i in range(0, len(binary_data), 8)]
+    for i, block in enumerate(split):
+        mode = "droit" if i % 2 == 0 else "quinconce"
+        print(f"↻ Cylindre {i:02d} ({mode}) : {block}")
+
+# === forex_ai.py ===
+class ForexSim:
+    def __init__(self):
+        self.last_price = 1.1000
+        self.debt_pool = []
+
+    def stream_price(self):
+        # Simule un flux de prix Forex avec des hausses ou baisses
+        delta = random.uniform(-0.002, 0.002)
+        self.last_price = round(self.last_price + delta, 5)
+        return self.last_price
+
+    def detect_gap(self, price):
+        # Simule la détection d'une transaction manquée
+        if abs(price - self.last_price) > 0.0018:
+            debt = round(abs(price - self.last_price), 5)
+            self.debt_pool.append(debt)
+            print(f"⚠️ Gap détecté : {debt} ajouté à la dette.")
+
+    def ai_compensate(self):
+        # Réutilise les dettes comme transaction IA
+        if self.debt_pool:
+            value = self.debt_pool.pop(0)
+            print(f"🤖 IA injecte une transaction de compensation : {value}")
+
+# === config.yaml ===
+# Contenu de ce fichier à créer à côté de agent.py
+# ---
+# node_id: BX-001
+# port: 5050
+# broadcast_ip: 255.255.255.255
+# interval_ms: 2000
+# deploy_path: deployed_agent.py
+
+# === Main Agent ===
+def load_config():
+    with open("config.yaml") as f:
+        return yaml.safe_load(f)
+
+def send_beacon(sock, config, binary):
+    sock.sendto(binary.encode(), (config["broadcast_ip"], config["port"]))
+    print(f"\n📤 Balise envoyée : {binary}")
+
+def send_encoded_file(sock, config, filepath):
+    encoded = encode_file_to_base64(filepath)
+    print("\n📤 Script encodé et envoyé via balise")
+    sock.sendto(encoded.encode(), (config["broadcast_ip"], config["port"]))
+
+def listen_for_beacons(sock, my_id, config):
+    sock.settimeout(0.5)
+    try:
+        data, addr = sock.recvfrom(65535)
+        message = data.decode()
+        if my_id not in message:
+            if len(message) > 300:  # Probablement un script encodé
+                print(f"📥 Script détecté depuis {addr[0]} - déploiement en cours")
+                decode_base64_to_file(message, config["deploy_path"])
+                print(f"✅ Script déployé sous {config['deploy_path']}")
+            else:
+                print(f"📥 Balise reçue de {addr[0]} : {message}")
+                process_flux(message)
+    except socket.timeout:
+        pass
+
+def main():
+    config = load_config()
+    node_id = config["node_id"]
+    short_hash = hash_id(node_id)
+    binary_beacon = generate_binary_id(short_hash)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.bind(("", config["port"]))
+
+    forex = ForexSim()
+
+    print(f"🔧 BaliseNet Node '{node_id}' initialisée sur port {config['port']}\n")
+
+    while True:
+        send_beacon(sock, config, binary_beacon)
+        listen_for_beacons(sock, short_hash, config)
+
+        # 🔁 Simulation Forex
+        price = forex.stream_price()
+        print(f"💱 Prix courant : {price}")
+        forex.detect_gap(price)
+        forex.ai_compensate()
+
+        time.sleep(config["interval_ms"] / 1000)
+
+if __name__ == "__main__":
+    main()
+    # Pour transmettre un script entier, décommente et adapte cette ligne :
+    # send_encoded_file(sock, config, "agent.py")
