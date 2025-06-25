@@ -122,5 +122,56 @@ services:
     ports:
       - "5000:5000"
 
-docker compose up --build
+docker compose up --build:/import/:
+<:/:>
+# Représentation d'une carte simple (ici, une grille 5x5)
+carte_largeur = 5
+carte_hauteur = 5
+
+# Position initiale du joueur (x, y)
+# (0,0) serait le coin supérieur gauche
+position_joueur_x = 0
+position_joueur_y = 0
+
+print(f"Position initiale du joueur : ({position_joueur_x}, {position_joueur_y})")
+
+# Fonction pour déplacer le joueur
+def deplacer_joueur(direction):
+    global position_joueur_x, position_joueur_y # Permet de modifier les variables globales
+
+    if direction == "nord":
+        if position_joueur_y > 0: # S'assure que le joueur ne sort pas de la carte
+            position_joueur_y -= 1
+            print("Le joueur se déplace vers le nord.")
+        else:
+            print("Impossible d'aller plus au nord, vous êtes au bord de la carte.")
+    elif direction == "sud":
+        if position_joueur_y < carte_hauteur - 1:
+            position_joueur_y += 1
+            print("Le joueur se déplace vers le sud.")
+        else:
+            print("Impossible d'aller plus au sud, vous êtes au bord de la carte.")
+    elif direction == "est":
+        if position_joueur_x < carte_largeur - 1:
+            position_joueur_x += 1
+            print("Le joueur se déplace vers l'est.")
+        else:
+            print("Impossible d'aller plus à l'est, vous êtes au bord de la carte.")
+    elif direction == "ouest":
+        if position_joueur_x > 0:
+            position_joueur_x -= 1
+            print("Le joueur se déplace vers l'ouest.")
+        else:
+            print("Impossible d'aller plus à l'ouest, vous êtes au bord de la carte.")
+    else:
+        print("Direction invalide. Utilisez 'nord', 'sud', 'est' ou 'ouest'.")
+
+    print(f"Nouvelle position du joueur : ({position_joueur_x}, {position_joueur_y})")
+
+# Exemples de mouvements
+deplacer_joueur("est")
+deplacer_joueur("sud")
+deplacer_joueur("nord")
+deplacer_joueur("nord") # Essai de sortir de la carte
+deplacer_joueur("inconnu")
 
