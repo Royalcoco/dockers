@@ -1,0 +1,126 @@
+ia_elec_firewall/
+├── app/
+│   ├── main.py        # Serveur Flask + WebSocket
+│   ├── electrical.py  # Simulation du réseau électrique IA
+│   └── utils.py       # Logs & état des prises
+├── templates/
+│   └── index.html     # Interface Web interactive
+├── static/
+│   └── style.css
+├── requirements.txt
+├── Dockerfile
+└── docker-compose.yml
+
+import random
+from .utils import log, get_nodes, set_node
+
+def simulate_signal():
+    for nid in get_nodes():
+        v = random.choice([220, 235, 240, 250])  # fluctuation fictive
+        set_node(nid, v)
+        if v > 245:
+            log(f"⚠️ Noeud {nid} surtension détectée ({v}V)")
+        elif v < 210:
+            log(f"⚠️ Noeud {nid} sous-tension détectée ({v}V)")
+
+from datetime import datetime
+
+nodes = {f"prise{i}": 230 for i in range(1,6)}
+logs = []
+
+def log(msg):
+    logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+    if len(logs)>200: logs.pop(0)
+
+def get_nodes(): return list(nodes.keys())
+def get_state(): return nodes
+def set_node(nid, v): nodes[nid] = v
+def disconnect(nid): nodes[nid] = None; log(f"🔒 Noeud {nid} isolée")
+def reconnect(nid): nodes[nid] = 230; log(f"🔌 Noeud {nid} reconnectée")
+
+from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO, emit
+import threading, time
+from .electrical import simulate_signal
+from .utils import log, get_logs, get_state, disconnect, reconnect, get_nodes
+
+app = Flask(__name__, template_folder="../templates", static_folder="../static")
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+@app.route("/") 
+def index(): return render_template("index.html")
+
+@app.route("/nodes") 
+def nodes(): return jsonify(get_state())
+
+@app.route("/action", methods=["POST"])
+def action():
+    d = request.json
+    if d["action"] == "disconnect": disconnect(d["id"])
+    else: reconnect(d["id"])
+    socketio.emit("state", get_state()); socketio.emit("logs", get_logs())
+    return jsonify(status="ok")
+
+@socketio.on("connect")
+def init():
+    emit("state", get_state())
+    emit("logs", get_logs())
+
+def sim_loop():
+    while True:
+        time.sleep(5)
+        simulate_signal()
+        socketio.emit("state", get_state())
+        socketio.emit("logs", get_logs())
+
+threading.Thread(target=sim_loop, daemon=True).start()
+
+if __name__=="__main__":
+    socketio.run(app, host="0.0.0.0", port=5000)
+<!DOCTYPE html><html><head>
+<meta charset="utf-8">
+<title>Pare‑feu IA – Simu électrique</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head><body>
+<h1>Pare‑feu électrique IA</h1>
+<div id="nodes"></div>
+<pre id="logs"></pre>
+<script>
+const socket = io();
+socket.on("state", s => {
+  const d = document.getElementById("nodes");
+  d.innerHTML = "";
+  for(let [id, v] of Object.entries(s)){
+    const btn = document.createElement("button");
+    btn.textContent = v===null ? `Reconnect ${id}` : `${id}: ${v}V`;
+    btn.onclick = () => fetch("/action", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id, action: v===null? "reconnect":"disconnect"})});
+    d.appendChild(btn);
+  }
+});
+socket.on("logs", l => document.getElementById("logs").innerText = l.join("\n"));
+</script>
+</body></html>
+
+body { font-family:monospace; background:#111; color:#0f0; padding:20px; }
+button { margin:5px; padding:10px; background:#222; color:#0f0; border:1px solid #0f0;}
+pre { background:#000; padding:10px; border:1px solid #0f0; height:200px; overflow:auto;}
+
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY app app
+COPY templates templates
+COPY static static
+CMD ["python","-u","app/main.py"]
+
+version: "3.8"
+services:
+  firewall:
+    build: .
+    ports:
+      - "5000:5000"
+
+docker compose up --build
+
