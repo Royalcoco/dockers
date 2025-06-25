@@ -1,0 +1,135 @@
+pip install streamlit numpy pandas scipy matplotlib yfinance scikit-learn
+streamlit run dashboard.py
+
+# === PLAN TECHNIQUE COMPLET ===
+# Objectif : Intégrer un modèle LPPL + SMB + analyse avancée pour détecter à l'avance les bulles spéculatives,
+# cracks boursiers et signaux de déséquilibres structurels (spéculation, instabilité systémique).
+
+# === MODULES REQUIS ===
+# pip install streamlit numpy pandas scipy matplotlib yfinance scikit-learn
+
+# === STRUCTURE ===
+# 1. smb_model.py : Modèle SMB (stabilité monétaire bancaire)
+# 2. lppl_model.py : Modèle LPPL (prévision des cracks)
+# 3. risk_model.py : Analyse prédictive du risque basé sur dérivées du marché (volatilité, RSI, MACD, etc.)
+# 4. dashboard.py : Interface utilisateur Streamlit
+
+# === CODE ===
+
+# === smb_model.py ===
+def compute_smb(D, Q, L, R, CPI, v, i, S, B, Vol):
+    phi1, phi2, phi3 = 0.5, 0.3, -0.2
+    lambda_t = phi1 * S + phi2 * B + phi3 * Vol
+    M_eff = D + Q - L - R
+    P_adj = CPI * (1 + v) * (1 + 0.3 * i)
+    V_B = M_eff / P_adj * lambda_t
+    SMB_index = V_B / (D + Q)
+    return SMB_index
+
+# === lppl_model.py ===
+import numpy as np
+from scipy.optimize import curve_fit
+
+def lppl(t, A, B, C, tc, m, w, phi):
+    epsilon = 1e-6
+    return A + B * np.power(tc - t + epsilon, m) + C * np.power(tc - t + epsilon, m) * np.cos(w * np.log(tc - t + epsilon) + phi)
+
+def fit_lppl_model(prices):
+    t = np.arange(len(prices))
+    p0 = [max(prices), -1, 1, len(prices)+10, 0.5, 7, 0]
+    bounds = ([0, -np.inf, -np.inf, len(prices), 0.1, 5, -np.pi], [np.inf, 0, np.inf, len(prices)+100, 1, 15, np.pi])
+    try:
+        popt, _ = curve_fit(lppl, t, prices, p0=p0, bounds=bounds, maxfev=10000)
+        return popt
+    except Exception as e:
+        return None
+
+# === risk_model.py ===
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+
+def compute_technical_indicators(prices):
+    returns = np.diff(prices) / prices[:-1]
+    volatility = np.std(returns[-20:])
+    momentum = np.mean(returns[-5:])
+    rolling_avg = np.mean(prices[-20:])
+    drawdown = (max(prices[-30:]) - prices[-1]) / max(prices[-30:])
+    return volatility, momentum, rolling_avg, drawdown
+
+def estimate_market_risk(prices):
+    vol, mom, avg, dd = compute_technical_indicators(prices)
+    score = 0.4 * vol + 0.3 * abs(mom) + 0.2 * dd + 0.1 * (avg / prices[-1])
+    scaler = MinMaxScaler((0, 1))
+    return float(np.clip(score, 0, 1))
+
+# === dashboard.py ===
+import streamlit as st
+import yfinance as yf
+import matplotlib.pyplot as plt
+from smb_model import compute_smb
+from lppl_model import fit_lppl_model, lppl
+from risk_model import estimate_market_risk
+
+st.set_page_config(layout="wide")
+st.title("📉 Système d'Alerte Financière Prédictive : SMB + LPPL + Risque")
+
+# Sélection d'un actif boursier
+ticker = st.sidebar.text_input("Entrez un symbole boursier (ex: ^GSPC pour S&P 500)", "^GSPC")
+data = yf.download(ticker, start="2005-01-01")['Adj Close']
+st.line_chart(data[-500:])
+
+# Section LPPL
+st.subheader("🔮 Détection de bulle via modèle LPPL")
+data_trimmed = data[-250:]
+prices = data_trimmed.values
+params = fit_lppl_model(prices)
+
+if params is not None:
+    t = np.arange(len(prices))
+    pred = lppl(t, *params)
+    fig, ax = plt.subplots()
+    ax.plot(t, prices, label="Prix réel")
+    ax.plot(t, pred, label="Modèle LPPL", linestyle="--")
+    ax.axvline(x=params[3], color='red', linestyle=':', label=f"Prévision crack t_c={int(params[3])}")
+    ax.legend()
+    st.pyplot(fig)
+else:
+    st.warning("Échec de l'ajustement du modèle LPPL. Essayez un autre actif.")
+
+# Section SMB
+st.subheader("🏦 Indice de Stabilité Monétaire Bancaire (SMB)")
+col1, col2 = st.columns(2)
+with col1:
+    D = st.slider("Dépôts bancaires", 500, 2000, 1000)
+    Q = st.slider("Actifs liquides", 0, 500, 200)
+    L = st.slider("Encours de prêts", 100, 1500, 600)
+    R = st.slider("Réserves obligatoires", 0, 500, 100)
+with col2:
+    CPI = st.slider("Indice des prix (CPI)", 80, 150, 110)
+    v = st.slider("Vitesse de circulation", 0.01, 0.2, 0.05)
+    i = st.slider("Taux d'intérêt", 0.01, 0.1, 0.03)
+    S = st.slider("Stabilité bancaire", 0.0, 1.0, 0.8)
+    B = st.slider("Indice du secteur bancaire", 0.0, 1.0, 0.7)
+    Vol = st.slider("Volatilité marché", 0.0, 0.5, 0.2)
+
+smb_val = compute_smb(D, Q, L, R, CPI, v, i, S, B, Vol)
+st.metric("Indice SMB", f"{smb_val:.2f}", delta=None)
+
+if smb_val < 0.9:
+    st.error("⚠️ Risque de déséquilibre monétaire : attention à la liquidité du système.")
+elif smb_val > 1.2:
+    st.success("✅ Stabilité bancaire solide.")
+else:
+    st.info("ℹ️ Stabilité modérée. Surveiller les indicateurs.")
+
+# Section Risque
+st.subheader("📊 Indice de Risque de Spéculation")
+market_risk = estimate_market_risk(prices)
+st.metric("Score de risque marché (0-1)", f"{market_risk:.2f}")
+
+if market_risk > 0.7:
+    st.warning("⚠️ Risque élevé de surchauffe spéculative.")
+elif market_risk < 0.3:
+    st.success("✅ Risque faible. Marché stable.")
+else:
+    st.info("ℹ️ Risque modéré. Surveiller la volatilité.")
