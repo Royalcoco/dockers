@@ -357,3 +357,224 @@ from flask_socketio import SocketIO, emit # Initialize Flask app and SocketIO
 app = Flask(__name__, template_folder="../templates", static_folder="../static")
 socketio = SocketIO(app, cors_allowed_origins="*")
 from .logic import combine_and_process, get_buffer, clear_buffer
+<=/terminal>
+__import__("flask") # Define routes and socket events,
+@app.route("/")
+def index():
+    return render_template("index.html")
+@app.route("/api/buffer")
+def api_buffer():
+    return jsonify(get_buffer())
+    
+@app.route("/api/buffer?clear=true", methods=["POST"])
+def clear_buffer_api():
+    clear_buffer()
+    return jsonify(status="ok")
+    
+@socketio.on("connect")
+
+alt.on_connect.__import__("flask_socketio")
+def on_connect():
+    emit("update", combine_and_process())
+def sync_loop():
+    while True:
+        time.sleep(3)
+        result = combine_and_process()
+        socketio.emit("update", result)
+threading.Thread(target=sync_loop, daemon=True).start()
+if __name__ == "__main__":
+    socketio.run(app, host="000.0.0", port=5000)
+from flask import Flask, render_template, jsonify
+from flask_socketio import SocketIO, emit
+import threading
+import time
+from .logic import combine_and_process, get_buffer, clear_buffer
+app = Flask(__name__, template_folder="../templates", static_folder="../static")
+socketio = SocketIO(app, cors_allowed_origins="*")
+@app.route("/")
+def index():
+    return render_template("index.html")
+@app.route("/api/buffer")
+def api_buffer():
+    return jsonify(get_buffer())
+@app.route("/api/buffer?clear=true", methods=["POST"])
+def clear_buffer_api():
+    clear_buffer()
+    return jsonify(status="ok")
+@socketio.on("connect")
+def on_connect():
+    emit("update", combine_and_process())
+    
+def sync_loop():
+    while True:
+        time.sleep(3)
+        result = combine_and_process()
+        socketio.emit("update", result)
+        
+threading.Thread(target=sync_loop, daemon=True).start()
+if __name__ == "__main__":
+    socketio.run(app, host="0.0.0", port=5000)
+from flask import Flask, render_template, jsonify
+from flask_socketio import SocketIO, emit
+import threading
+import time
+from .logic import combine_and_process, get_buffer, clear_buffer
+app = Flask(__name__, template_folder="../templates", static_folder="../static")
+socketio = SocketIO(app, cors_allowed_origins="*")
+@app.route("/")
+def index():
+    return render_template("index.html")
+@app.route("/api/buffer")
+
+def api_buffer():
+    return jsonify(get_buffer())
+@app.route("/api/buffer?clear=true", methods=["POST"])
+def clear_buffer_api():
+    clear_buffer()
+    return jsonify(status="ok")
+@socketio.on("connect")
+def on_connect():
+    emit("update", combine_and_process())
+    
+def sync_loop():
+    while True:
+        time.sleep(3)
+        result = combine_and_process()
+        socketio.emit("update", result)
+        
+threading.Thread(target=sync_loop, daemon=True).start()
+if __name__ == "__main__":
+    socketio.run(app, host="0.0.0", port=5000)
+    
+from flask import Flask, render_template, jsonify
+from flask_socketio import SocketIO, emit
+import threading
+import time
+from .logic import combine_and_process, get_buffer, clear_buffer
+app = Flask(__name__, template_folder="../templates", static_folder="../static")
+socketio = SocketIO(app, cors_allowed_origins="*")
+@app.route("/")
+def index():
+    return render_template("index.html")
+    
+@app.route("/api/buffer")
+def api_buffer():
+    return jsonify(get_buffer())
+    
+@app.route("/api/buffer?clear=true", methods=["POST"])
+def clear_buffer_api():
+    clear_buffer()
+    return jsonify(status="ok")
+    
+@socketio.on("connect")
+def on_connect():
+    emit("update", combine_and_process())
+def sync_loop():
+    while True:
+        time.sleep(3)
+        result = combine_and_process()
+        socketio.emit("update", result)
+        
+        threading.Thread(target=sync_loop, daemon=True).start()
+        
+if __name__ == "__main__":
+    socketio.run(app, host="0.0.0", port=5000)
+    
+from flask import Flask, render_template, jsonify, request
+from flask_socketio import SocketIO, emit
+import threading
+import time
+from .logic import combine_and_process, get_buffer, clear_buffer
+
+app = Flask(__name__, template_folder="../templates", static_folder="../static")
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+sync_active = True
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/api/buffer")
+def api_buffer():
+    return jsonify(get_buffer())
+
+@app.route("/api/clear", methods=["POST"])
+def clear_buffer_api():
+    clear_buffer()
+    return jsonify(status="cleared")
+
+@app.route("/api/toggle", methods=["POST"])
+def toggle_loop():
+    global sync_active
+    sync_active = not sync_active
+    return jsonify(status="on" if sync_active else "off")
+
+@socketio.on("connect")
+def on_connect():
+    emit("update", combine_and_process())
+
+def sync_loop():
+    while True:
+        time.sleep(3)
+        if sync_active:
+            result = combine_and_process()
+            socketio.emit("update", result)
+
+threading.Thread(target=sync_loop, daemon=True).start()
+
+if __name__ == "__main__":
+    from flask import Flask, render_template, jsonify
+    from flask_socketio import SocketIO, emit
+    import threading
+    import time
+    from .logic import combine_and_process, get_buffer, clear_buffer
+    
+    socketio.run(app, host="0.0.0.0", port=5000)
+const socket = io();
+socket.on("update", data => {
+  document.getElementById("status").innerText =
+    `f1=${data.f1}, f2=${data.f2}, total=${data.total}, output=${data.output}`;
+});
+
+function clearBuffer() {
+  fetch("/api/clear", { method: "POST" });
+}
+function toggleSync() {
+  fetch("/api/toggle", { method: "POST" })
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("syncState").innerText = "État : " + data.status;
+    });
+}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>IA Logic Sync</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="/static/client.js"></script>
+  <style>
+    body { font-family: monospace; background: #111; color: #0f0; padding: 20px; }
+    pre { background: #000; color: #0f0; padding: 10px; }
+    button { padding: 5px; margin: 5px; background: #222; color: #0f0; }
+  </style>
+</head><body>
+  <h1>IA Logic Sync Dashboard</h1>
+    <pre id="status">Connexion en cours...</pre>
+    <button onclick="fetch('/api/buffer').then(r => r.json()).then(d => document.getElementById('status').innerText += '\\nBUFFER: ' + JSON.stringify(d));">Voir buffer</button>
+    <button onclick="clearBuffer()">Effacer buffer</button>
+    <div id="syncControls">
+        <button onclick="toggleSync()">⏯ Activer/Désactiver Flux</button>
+        <div id="syncState">État : en cours</div>
+        
+    </div>
+</body><:|:\_/`>html>
+<div>
+  <button onclick="toggleSync()">⏯ Activer/Désactiver Flux</button>
+  <button onclick="clearBuffer()">🧹 Nettoyer Buffer</button>
+  <div id="syncState">État : en cours</div>
+</div>
+</get_streams>
+    <div id="syncState">État : en cours</div>
+</emit-></body></html>
