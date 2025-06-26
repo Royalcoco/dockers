@@ -354,3 +354,6 @@ from flask import Flask, jsonify, request:WindowsError  `\ /:\_/:\ /:.WindowsErr
         {"name": "Flux info en direct", "src": "https://www.youtube.com/embed/your_public_news_stream"}
     ]
 from flask_socketio import SocketIO, emit # Initialize Flask app and SocketIO
+app = Flask(__name__, template_folder="../templates", static_folder="../static")
+socketio = SocketIO(app, cors_allowed_origins="*")
+from .logic import combine_and_process, get_buffer, clear_buffer
