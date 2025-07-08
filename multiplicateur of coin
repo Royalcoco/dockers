@@ -1,0 +1,143 @@
+$ChainFile = "$PSScriptRoot\keypass_network.json"
+$Ledger = @()
+
+# Chargement du flux spirale
+if (Test-Path $ChainFile) {
+    $Ledger = Get-Content $ChainFile | ConvertFrom-Json
+}
+
+function Get-FibonacciBoost {
+    param([int]$n)
+    if ($n -le 1) { return 1 }
+    $a = 1; $b = 1
+    for ($i = 2; $i -lt $n; $i++) {
+        $temp = $a + $b
+        $a = $b
+        $b = $temp
+    }
+    return $b
+}
+
+function Calculate-EnergeticValue {
+    param($inputKey)
+
+    $repeats = ($Ledger | Where-Object { $_.KeyPass -eq $inputKey }).Count
+    $isCoreNode = $inputKey -match "docker|pipeline|container|build|deploy|vm"
+
+    # Oscillation énergétique basée sur présence et identité
+    $base = [Math]::Round([Math]::Abs([Math]::Sin($repeats) * 50) + (Get-Random -Minimum 3 -Maximum 9))
+
+    if ($isCoreNode) {
+        $amplified = $base + (Get-FibonacciBoost ($repeats + 5))
+    } else {
+        $amplified = $base - ($repeats * 3)
+    }
+
+    return [Math]::Max($amplified, 1)
+}
+
+function Generate-Node {
+    param($userInput)
+
+    $spinValue = Calculate-EnergeticValue $userInput
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $nodeID = [System.Guid]::NewGuid().ToString()
+
+    return [PSCustomObject]@{
+        KeyPass      = $userInput
+        SpinValue    = $spinValue
+        Timestamp    = $timestamp
+        NodeID       = $nodeID
+        PhaseAngle   = "$([math]::Round((23 + $spinValue) % 360, 2))°"
+        SpiralLayer  = ($Ledger.Count + 1)
+    }
+}
+
+function Render-Network {
+    $Ledger | Sort-Object Timestamp | Format-Table KeyPass, SpinValue, PhaseAngle, SpiralLayer, Timestamp, NodeID -AutoSize
+}
+
+function Launch-KeyPassNetwork {
+    Clear-Host
+    Write-Host "🧠 KeyPassChain Möbius - Système de blockchain énergétique-symbolique" -ForegroundColor Cyan
+
+    while ($true) {
+        $input = Read-Host "`n🔍 Entrez un mot-clé (ou 'exit' pour libérer l'onde)"
+        if ($input -eq "exit") {
+            break
+        }
+
+        $node = Generate-Node -userInput $input
+        $Ledger += $node
+
+        Write-Host "⚡ Nœud généré : $($node.KeyPass) → $($node.SpinValue) Ψ (ID: $($node.NodeID), Angle: $($node.PhaseAngle))"
+    }
+
+    $Ledger | ConvertTo-Json -Depth 4 | Set-Content $ChainFile
+    Write-Host "`n📦 Réseau spiralé sauvegardé dans : keypass_network.json"
+    Render-Network
+}
+
+Launch-KeyPassNetwork
+{
+  "PassKeyID": "PK-2025-07-08-XYZ123",
+  "Units": 10000,
+  "BaseBlock": 100000,
+  "ExchangeRateX": 10,
+  "ConvertedValue": 100,
+  "RelativeTo": "100,000 = 10,000",
+  "Notes": "Dynamically adjusted PassKey based on tiered exchange protocol"
+}
+{
+  "BlockID": "AUTO-GENERATED",
+  "Paquets": [
+    {
+      "ChunkID": "P1",
+      "Octets": 10000,
+      "DeltaFromPrevious": 0,
+      "CookieHash": "SHA256",
+      "CryptoValue": 42
+    },
+    ...
+  ],
+  "TotalUnits": 100000,
+  "DerivedCrypto": [
+    {
+      "Key": "COOKIE-1",
+      "Value": 42,
+      "LinkedTo": "P1"
+    }
+  ]
+}
+$OutputFile = "$PSScriptRoot\CryptoLedger.json"
+$TotalUnits = 100000
+$PacketSize = 10000
+$PacketCount = 10
+$CryptoLedger = @()
+$LastValue = 0
+
+for ($i = 1; $i -le $PacketCount; $i++) {
+    # Simule un bloc de 10 000 octets (peut être remplacé par des vrais fichiers)
+    $current = Get-Random -Minimum 1 -Maximum 99999
+    $delta = [Math]::Abs($current - $LastValue)
+    $LastValue = $current
+
+    # Génère une valeur crypto (basée sur delta)
+    $cryptoValue = [Math]::Max([Math]::Round([Math]::Log($delta + 1) * 42), 1)
+
+    # Simule un cookie hash
+    $cookie = [System.BitConverter]::ToString((New-Object -TypeName System.Security.Cryptography.SHA256Managed).ComputeHash([System.Text.Encoding]::UTF8.GetBytes("$delta-$i"))).Replace("-", "")
+
+    # Ajoute au registre
+    $CryptoLedger += [PSCustomObject]@{
+        ChunkID = "P$i"
+        Octets = $PacketSize
+        DeltaFromPrevious = $delta
+        CookieHash = $cookie
+        CryptoValue = $cryptoValue
+    }
+}
+
+# Sauvegarde
+$CryptoLedger | ConvertTo-Json -Depth 3 | Set-Content $OutputFile
+Write-Host "✅ CryptoLedger généré : $OutputFile"
