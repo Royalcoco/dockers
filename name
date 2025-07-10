@@ -1,0 +1,9 @@
+{
+  "ID": "HEX-23",
+  "Coords": [3, 5],
+  "Formula": "(a+b)^2 = a^2 + 2ab + b^2",
+  "Energy": 42,
+  "LinkedTo": ["HEX-22", "HEX-24"],
+  "File": "formules/hex23.form",
+  "PromptRef": "génère moi une projection en spirale de cette formule"
+}
